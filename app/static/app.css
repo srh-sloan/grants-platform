@@ -1,0 +1,23 @@
+/* App-level overrides on top of GOV.UK Frontend.
+   Keep this file small; anything that looks like it wants a whole component
+   should probably be a template partial instead. */
+
+/* The service-navigation macro only knows how to render anchors. "Sign out"
+   has to be a POST (CSRF-protected) so we render it as a <form><button> in the
+   navigationEnd slot and strip the default button chrome so it matches its
+   anchor siblings. */
+.app-service-navigation__form {
+  margin: 0;
+}
+
+.app-service-navigation__button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.app-service-navigation__button:hover {
+  text-decoration: underline;
+}

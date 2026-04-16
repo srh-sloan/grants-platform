@@ -11,21 +11,38 @@
   {% if current_user.role.value in ("assessor", "admin") %}
     {% set _nav_items = [
       {"href": url_for("assessor.queue"),      "text": "Queue"},
-      {"href": url_for("assessor.allocation"), "text": "Allocation"},
-      {"href": url_for("auth.logout"),         "text": "Sign out"}
+      {"href": url_for("assessor.allocation"), "text": "Allocation"}
     ] %}
   {% else %}
     {% set _nav_items = [
-      {"href": url_for("applicant.dashboard"), "text": "My applications"},
-      {"href": url_for("auth.logout"),         "text": "Sign out"}
+      {"href": url_for("applicant.dashboard"), "text": "My applications"}
     ] %}
   {% endif %}
+
+  {# Sign out must POST so CSRF protection applies (see auth.logout). The
+     service-navigation macro only renders anchors for its `navigation` items,
+     so we inject the form through the navigationEnd slot as a matching <li>. #}
+  {% set _signout_slot %}
+    <li class="govuk-service-navigation__item">
+      <form method="post"
+            action="{{ url_for('auth.logout') }}"
+            class="app-service-navigation__form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit"
+                class="govuk-service-navigation__link app-service-navigation__button">
+          Sign out
+        </button>
+      </form>
+    </li>
+  {% endset %}
 {% else %}
   {% set _nav_items = [] %}
+  {% set _signout_slot = "" %}
 {% endif %}
 
 {{ govukServiceNavigation({
   "serviceName": "Grants platform",
   "serviceUrl": url_for('public.index'),
-  "navigation": _nav_items
+  "navigation": _nav_items,
+  "slots": {"navigationEnd": _signout_slot}
 }) }}
