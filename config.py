@@ -27,3 +27,4 @@ class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
     SECRET_KEY = "test-secret"
+    UPLOAD_FOLDER: str = str(BASE_DIR / "uploads_test")

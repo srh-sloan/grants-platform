@@ -55,7 +55,7 @@ from app.models import (
     Grant,
     GrantStatus,
 )
-from app.uploads import list_documents
+from app.uploads import UploadRejected, list_documents, save_upload
 
 bp = Blueprint("applicant", __name__, url_prefix="/apply")
 
@@ -173,16 +173,10 @@ def _extract_field_values(page: dict, form_data: MultiDict) -> dict[str, object]
             else:
                 extracted[fid] = fid in form_data
         elif ftype == "file":
-            # Uploads are Stream D's contract (``app.uploads``). Until that
-            # lands, we accept whatever is in the form payload as a
-            # placeholder string (typically the filename submitted via
-            # Stream D's eventual upload flow). This lets the applicant
-            # finish the form in Phase 1 tests; Stream D will swap in real
-            # ``request.files`` handling without changing this contract.
-            value = form_data.get(fid)
-            if isinstance(value, str):
-                value = value.strip()
-            extracted[fid] = value or None
+            # Real uploads come through request.files and are processed
+            # separately in save_page. We return None here; save_page
+            # supplements with the existing saved answer before validation.
+            extracted[fid] = None
         else:
             value = form_data.get(fid)
             if isinstance(value, str):
@@ -471,10 +465,39 @@ def save_page(app_id: int, page_id: str):
         abort(404)
 
     submitted = _extract_field_values(page, request.form)
-    errors = validate_page(page, submitted)
+    existing_page = (application.answers_json or {}).get(page_id, {})
+
+    # Process file uploads BEFORE validation so validate_page sees the
+    # filename as the field value (it just needs a truthy string, not the
+    # actual bytes). Upload errors are collected separately.
+    upload_errors: dict[str, str] = {}
+    for field in page.get("fields") or []:
+        if field.get("type") != "file":
+            continue
+        fid = field["id"]
+        file_storage = request.files.get(fid)
+        if file_storage and file_storage.filename:
+            try:
+                # Stage the Document row; only committed if the full page is valid.
+                doc = save_upload(application, kind=fid, file_storage=file_storage)
+                submitted[fid] = doc.filename
+            except UploadRejected as exc:
+                upload_errors[fid] = str(exc)
+        else:
+            # No new file — use the previously saved filename (from a prior
+            # upload) or any text value submitted in the form (covers tests
+            # and hidden-input replay patterns).
+            submitted[fid] = (
+                existing_page.get(fid)
+                or (request.form.get(fid) or "").strip()
+                or None
+            )
+
+    errors = {**validate_page(page, submitted), **upload_errors}
 
     if errors:
-        # Re-render the same page showing the field-level errors.
+        # Roll back any staged Document rows — the page wasn't fully valid.
+        db.session.rollback()
         return _render_form_page(
             application, form, page, submitted, errors=errors, status_code=400
         )

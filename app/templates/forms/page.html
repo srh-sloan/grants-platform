@@ -39,8 +39,8 @@
     <div class="govuk-grid-column-two-thirds">
 
       <span class="govuk-caption-l">{{ application.grant.name }}</span>
-      {% if all_pages %}
-        <p class="govuk-body-s govuk-!-colour-secondary">Page {{ current_index + 1 }} of {{ all_pages | length }}</p>
+      {% if page_number and total_pages %}
+        <p class="govuk-body-s govuk-!-colour-secondary">Page {{ page_number }} of {{ total_pages }}</p>
       {% endif %}
       <h1 class="govuk-heading-xl">{{ page.title }}</h1>
 
