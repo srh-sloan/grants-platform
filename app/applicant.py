@@ -546,6 +546,14 @@ def submit(app_id: int):
     application.submitted_at = datetime.now(UTC)
     db.session.commit()
 
+    # Trigger AI assessment fire-and-forget -- failures are logged, never shown to applicant.
+    try:
+        from app.assessor_ai import assess_application
+        assess_application(application.id)
+    except Exception as exc:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("AI assessment failed for app %s: %s", application.id, exc)
+
     flash(
         f"Application submitted to {application.grant.name}. "
         "We'll be in touch once it has been assessed.",

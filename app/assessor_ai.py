@@ -252,7 +252,19 @@ def assess_application(application_id: int) -> Assessment | None:
     ai_user = _get_or_create_ai_user()
     prompt = _build_prompt(application, criteria)
 
-    client = anthropic.Anthropic()
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        # Try loading .env from the project root in case Flask didn't pick it up
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+        except ImportError:
+            pass
+    if not api_key:
+        log.error("assess_application: ANTHROPIC_API_KEY not set")
+        return None
+    client = anthropic.Anthropic(api_key=api_key)
     log.info("assess_application: calling Claude for application %s", application_id)
     message = client.messages.create(
         model=_MODEL,
