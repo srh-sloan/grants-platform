@@ -39,8 +39,11 @@
     <div class="govuk-grid-column-two-thirds">
 
       <span class="govuk-caption-l">{{ application.grant.name }}</span>
+      {% if form_caption is defined and form_caption %}
+        <p class="govuk-body-s govuk-!-font-weight-bold govuk-!-margin-bottom-1">{{ form_caption }}</p>
+      {% endif %}
       {% if page_number and total_pages %}
-        <p class="govuk-body-s govuk-!-colour-secondary">Page {{ page_number }} of {{ total_pages }}</p>
+        <p class="govuk-caption-m">Page {{ page_number }} of {{ total_pages }}</p>
       {% endif %}
       <h1 class="govuk-heading-xl">{{ page.title }}</h1>
 
@@ -169,10 +172,22 @@
 
           {# ---- date ---- #}
           {% elif field.type == "date" %}
+            {# Split stored YYYY-MM-DD back into separate day / month / year for pre-fill.
+               The | int | string filter pair strips leading zeros (e.g. "01" → 1 → "1")
+               which is the correct format for GOV.UK date inputs. #}
+            {% set _dp = field_value.split("-") if (field_value and "-" in field_value) else [] %}
+            {% set _day   = (_dp[2] | int | string) if _dp | length == 3 and _dp[2] else "" %}
+            {% set _month = (_dp[1] | int | string) if _dp | length == 3 and _dp[1] else "" %}
+            {% set _year  = _dp[0] if _dp | length == 3 and _dp[0] else "" %}
             {{ govukDateInput({
               "id": field.id,
               "namePrefix": field.id,
               "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--s"}},
+              "items": [
+                {"name": "day",   "classes": "govuk-input--width-2", "value": _day},
+                {"name": "month", "classes": "govuk-input--width-2", "value": _month},
+                {"name": "year",  "classes": "govuk-input--width-4", "value": _year}
+              ],
               "errorMessage": error_obj
             }) }}
 
