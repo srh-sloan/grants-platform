@@ -1,0 +1,43 @@
+{#
+  Shared read-only answers summary — owned by Stream B.
+
+  Included by:
+    - Stream A's applicant review page (/apply/<id>/review)
+    - Stream C's assessor detail view (/assess/<id>)
+
+  Context:
+    schema     — form schema dict (has pages + fields)
+    answers    — {page_id: {field_id: value}}
+    documents  — iterable of Document models (from uploads.list_documents)
+
+  Stream B fills this in properly in Phase 2 (P2.4) — GOV.UK summary-list
+  component per page, correct formatting per field type, documents section.
+#}
+{% from 'govuk_frontend_jinja/components/summary-list/macro.html' import govukSummaryList %}
+
+<div data-testid="answers-summary">
+  {% for page in schema.pages %}
+    <h2 class="govuk-heading-l">{{ page.title }}</h2>
+    {% set page_answers = answers.get(page.id) or {} %}
+    {{ govukSummaryList({
+      "rows": [
+        {
+          "key": {"text": field.label},
+          "value": {"text": page_answers.get(field.id) | default("Not answered", true)}
+        }
+        for field in page.fields
+      ]
+    }) }}
+  {% endfor %}
+
+  <h2 class="govuk-heading-l">Supporting documents</h2>
+  {% if documents %}
+    <ul class="govuk-list govuk-list--bullet">
+      {% for doc in documents %}
+        <li>{{ doc.kind }} — {{ doc.filename }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="govuk-body govuk-hint">No documents uploaded yet.</p>
+  {% endif %}
+</div>

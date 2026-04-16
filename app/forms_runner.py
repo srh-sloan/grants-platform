@@ -33,6 +33,9 @@ AND a new Jinja macro — coordinate across streams before doing so):
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
+
 SUPPORTED_FIELD_TYPES: frozenset[str] = frozenset(
     {"text", "textarea", "radio", "checkbox", "select", "number", "currency", "date", "file"}
 )
@@ -62,6 +65,15 @@ def next_page_id(schema: dict, current_page_id: str) -> str | None:
     for idx, page in enumerate(pages):
         if page.get("id") == current_page_id and idx + 1 < len(pages):
             return pages[idx + 1]["id"]
+    return None
+
+
+def prev_page_id(schema: dict, current_page_id: str) -> str | None:
+    """ID of the page before ``current_page_id``, or None if at the start."""
+    pages = list_pages(schema)
+    for idx, page in enumerate(pages):
+        if page.get("id") == current_page_id and idx > 0:
+            return pages[idx - 1]["id"]
     return None
 
 
@@ -119,3 +131,40 @@ def merge_page_answers(
     merged = dict(existing_answers)
     merged[page_id] = {**(merged.get(page_id) or {}), **page_submission}
     return merged
+
+
+# ---------------------------------------------------------------------------
+# Eligibility evaluator — reads rules from ``grant.config_json["eligibility"]``
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class EligibilityResult:
+    """Outcome of evaluating a set of eligibility rules against answers.
+
+    - ``passed`` — all rules evaluated true.
+    - ``failures`` — list of rule ``id``s that failed (ordered as declared).
+    - ``labels`` — ``{rule_id: human-readable label}`` for rendering.
+    """
+
+    passed: bool
+    failures: list[str] = dataclass_field(default_factory=list)
+    labels: dict[str, str] = dataclass_field(default_factory=dict)
+
+
+def evaluate_eligibility(rules: list[dict], answers: dict) -> EligibilityResult:
+    """Evaluate ``rules`` against a flat ``{field_id: value}`` dict.
+
+    Rule shape (owned by Stream D, see ``seed/grants/ehcf.json``)::
+
+        {"id": "annual_income", "type": "max", "label": "...", "value": 5000000}
+        {"id": "org_type", "type": "in", "values": [...]}
+        {"id": "operates_in_england", "type": "equals", "value": true}
+        {"id": "years_serving_homeless", "type": "min", "value": 3}
+
+    Stream B fills in the handlers in Phase 2 (P2.2). Until then the stub
+    reports a single failure so callers degrade gracefully rather than
+    pretending everyone's eligible.
+    """
+    # Phase 2 (Stream B): replace with real handlers per rule ``type``.
+    raise NotImplementedError("Stream B: evaluate_eligibility not implemented yet")

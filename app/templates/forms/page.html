@@ -1,0 +1,41 @@
+{#
+  Shared applicant form page — owned by Stream B.
+
+  Context:
+    form         — Form model
+    application  — Application model
+    page         — page dict from the JSON schema
+    answers      — {field_id: value} for this page (may be empty)
+    errors       — {field_id: "message"} (may be empty)
+    action_url   — POST target (built by Stream A)
+    back_url     — optional previous-page URL (built by Stream A)
+
+  Stream B fills this in properly in Phase 2 (P2.1) — renders field macros per
+  type, renders a GOV.UK error summary, "Save and continue" / "Back" buttons.
+  Until then this placeholder keeps Stream A's route bootable.
+#}
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }}{% endblock %}
+
+{% block content %}
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <span class="govuk-caption-l">{{ application.grant.name }}</span>
+      <h1 class="govuk-heading-xl">{{ page.title }}</h1>
+
+      <div class="govuk-inset-text">
+        Form page renderer is a Stream B placeholder. Fields to come:
+        <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-2">
+          {% for field in page.fields %}
+            <li><code>{{ field.id }}</code> ({{ field.type }}){% if field.required %} <strong>required</strong>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      {% if errors %}
+        <p class="govuk-error-message">{{ errors|length }} field(s) need attention.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

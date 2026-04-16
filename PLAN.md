@@ -228,20 +228,213 @@ After Phase 0, the four-person split stabilises roughly as:
 
 | Stream | Owns through phases 1–3 | Main artefacts |
 |---|---|---|
-| **Auth & applicant UX** | registration, dashboards, status, review/submit | `auth.py`, `applicant.py`, dashboard templates |
-| **Form runner** | JSON schema renderer, validation, drafts, conditional logic later | `forms_runner.py`, field macros, `/forms/*.json` |
-| **Assessor & scoring** | queue, detail view, scoring form, engine, allocation dashboard | `assessor.py`, `scoring.py`, assessor templates |
-| **Platform & data** | models, seed, grant/form config, GOV.UK Frontend, deploy | `models.py`, `seed.py`, `/static`, `config.py` |
+| **A — Auth & applicant UX** | registration, dashboards, status, review/submit | `auth.py`, `applicant.py`, `templates/auth/**`, `templates/applicant/**` |
+| **B — Form runner** | JSON schema renderer, validation, drafts, eligibility eval, conditional logic later | `forms_runner.py`, `templates/forms/**`, field macros, `/forms/*.json` |
+| **C — Assessor & scoring** | queue, detail view, scoring form, engine, allocation, decisions | `assessor.py`, `scoring.py`, `templates/assessor/**` |
+| **D — Platform, data & uploads** | models, seed, dev fixtures, uploads, grant/form config, GOV.UK Frontend, deploy | `models.py`, `extensions.py`, `uploads.py`, `public.py`, `seed.py`, `seed/**`, `/static`, `config.py`, Docker |
 
-Cross-cutting concerns (handled by whoever touches them first, committed
-early to avoid merge pain):
-- JSON form schema shape — must be agreed **before** form runner and seed
-  start diverging. Propose: pair-write one file together in Phase 0, commit
-  it, then fan out.
-- Grant config shape (`criteria`, `weights`, `eligibility`, `award_ranges`) —
-  same: pin in Phase 0.
-- Status enum on `applications` — agreed up front so dashboards and
-  assessor queue render consistently.
+All cross-stream contracts referenced below are **pinned in Phase 0** — see
+`CONTRIBUTING.md` for the authoritative list. Changing any of them is a
+coordinated edit across every consumer in the same commit.
+
+---
+
+## Parallel workstream briefs (Phases 1–3)
+
+Each brief is self-contained: one developer can pick it up, read only the
+files they own + the public APIs listed under "Imports from", and ship the
+thin slice described at the top of each phase without waiting on anyone
+else. If you need a symbol another stream hasn't built yet, **import it
+anyway** — Phase 0 ships stubs that raise `501` or return placeholder data,
+so your routes compile and your tests run.
+
+### Workstream A — Auth & applicant UX
+
+**Deliverable:** an applicant can register, sign in, see a list of their
+applications, open a draft, click through the form, review answers, submit,
+and see status updates on the dashboard.
+
+**Owns (edit freely):**
+- `app/auth.py` (replace the `/login`, `/register`, `/logout` stubs with WTForms-backed views)
+- `app/applicant.py` (replace the dashboard stub; add start / form-page / review / submit routes)
+- `app/templates/auth/**`
+- `app/templates/applicant/**`
+- `tests/test_auth.py`, `tests/test_applicant.py`
+
+**Ships (mapped to phase plan):**
+- P1.1 Register / login / logout (Flask-Login + `werkzeug.security`)
+- P1.4 Applicant dashboard — "my applications" list with status tags
+- P2.1 Thin wrapper routes for the multi-page form runner (lookup application, call Stream B's helpers, redirect to `next_page_id`)
+- P2.4 Read-only review page using Stream B's `templates/forms/summary.html` partial and Stream D's document list
+- P2.5 Submit action — validates no pending pages, sets `submitted_at`, transitions `ApplicationStatus.DRAFT → SUBMITTED`
+- P3.6 visible half — outcome status tag / decision banner on the applicant dashboard once Stream C has written a decision
+
+**Public API this stream exposes** (imports listed in `CONTRIBUTING.md`):
+- `auth.applicant_required`, `auth.assessor_required`, `auth.login_required` (already pinned)
+- Route names — `auth.login`, `auth.register`, `auth.logout`, `applicant.dashboard`, `applicant.start`, `applicant.form_page`, `applicant.save_page`, `applicant.review`, `applicant.submit` (use `url_for` from other streams)
+
+**Imports from other streams (stubs already in place):**
+- `forms_runner.list_pages`, `get_page`, `next_page_id`, `validate_page`, `merge_page_answers`, `evaluate_eligibility` — Stream B
+- `models.{User, Organisation, Grant, Form, Application, UserRole, ApplicationStatus}` — Stream D
+- `uploads.list_documents(application_id)` — Stream D (for review page)
+
+**Done when:** an anonymous visitor registers, logs in, starts the EHCF application, saves the first page, logs out and back in, and sees the draft on their dashboard; `pytest tests/test_auth.py tests/test_applicant.py` passes.
+
+### Workstream B — Form runner
+
+**Deliverable:** a grant-agnostic JSON form engine: any correctly-shaped
+schema renders as a multi-page applicant form with validation, draft saving,
+eligibility pre-check, and a read-only summary — no Python changes required
+to onboard a new form.
+
+**Owns (edit freely):**
+- `app/forms_runner.py` (pure helpers; no Flask/DB/I-O)
+- `app/templates/forms/**` (page template, summary partial, one macro per field type)
+- `app/forms/*.json` (schemas — new schemas land here)
+- `tests/test_forms_runner.py` (exists), `tests/test_forms_templates.py`
+
+**Ships (mapped to phase plan):**
+- P1.3 Render one page from JSON + required-field validation + draft merge (already stubbed)
+- P2.1 Multi-page support: `next_page_id` / `prev_page_id` helpers, error-summary component, "Back" navigation, page progress indicator
+- P2.2 Eligibility pre-check: `evaluate_eligibility(rules, answers)` pure helper + eligibility form renderer (reuses page template)
+- P2.4 read-only `templates/forms/summary.html` partial — Stream A includes it on the review page
+- P4.2 Word-limit validator (when a second grant forces it)
+- P4.3 Conditional field visibility (when EHCF capital / readiness check forces it)
+
+**Public API this stream exposes** (pinned in `CONTRIBUTING.md`):
+
+```python
+from app.forms_runner import (
+    list_pages, get_page, next_page_id, prev_page_id,
+    validate_page, merge_page_answers,
+    evaluate_eligibility, EligibilityResult,
+    SUPPORTED_FIELD_TYPES,
+)
+```
+
+Plus two templates other streams render:
+
+- `templates/forms/page.html` — context: `{form, application, page, answers, errors, back_url, action_url}`
+- `templates/forms/summary.html` — context: `{schema, answers, documents}` (documents list comes from Stream D)
+
+**Imports from other streams:** none for the pure helpers. The page template uses GOV.UK Frontend macros directly and consumes the route action URLs built by Stream A.
+
+**Done when:** every field type in `SUPPORTED_FIELD_TYPES` has a working macro; the EHCF application form renders, validates, and round-trips a draft answer via `merge_page_answers`; eligibility rules in `seed/grants/ehcf.json` evaluate deterministically against a dict of answers; `pytest tests/test_forms_runner.py` passes.
+
+### Workstream C — Assessor & scoring
+
+**Deliverable:** an assessor sees a filterable queue of submitted
+applications, opens one, scores each criterion with notes, and the allocation
+dashboard ranks everyone against the grant's budget.
+
+**Owns (edit freely):**
+- `app/assessor.py` (replace the `/assess/` stub; add detail, score-save, allocation, decision routes)
+- `app/scoring.py` (already a complete pure module — extend only when a new grant demands it)
+- `app/templates/assessor/**`
+- `tests/test_scoring.py` (exists), `tests/test_assessor.py`
+
+**Ships (mapped to phase plan):**
+- P1.5 Queue skeleton (empty state + title bar)
+- P3.1 Application detail view — applicant answers (via `templates/forms/summary.html` from Stream B) and documents (from Stream D) rendered read-only
+- P3.2 Scoring form — WTForms fields generated from `grant.config_json.criteria` (score 0–N + required notes per criterion)
+- P3.3 Scoring engine — already pure in `app/scoring.py`; just call `calculate_weighted_score` + `has_auto_reject`, persist on Assessment
+- P3.4 Save partial / final — partial save writes scores_json/notes_json; final submit sets `weighted_total`, `recommendation`, `completed_at`
+- P3.5 Allocation dashboard — rank by `weighted_total` desc, running sum of requested funding vs `grant.config_json.award_ranges.total_budget`
+- P3.6 Decision recording — fund / reject / refer transitions `Application.status` to `APPROVED` / `REJECTED` (refer = remain under_review)
+- B2 filters later (status, LA area, funding type, score) once the queue has rows to filter
+
+**Public API this stream exposes** (already pinned):
+
+```python
+from app.scoring import (
+    calculate_weighted_score, has_auto_reject,
+    missing_criteria, max_weighted_total,
+)
+```
+
+Route names other streams might `url_for`:
+- `assessor.queue`, `assessor.detail`, `assessor.save_score`, `assessor.allocation`, `assessor.record_decision`
+
+**Imports from other streams (stubs in place):**
+- `auth.assessor_required` — Stream A
+- `models.{Application, Assessment, User, ApplicationStatus, AssessmentRecommendation}` — Stream D
+- `forms_runner.list_pages` + `templates/forms/summary.html` — Stream B, to render applicant answers in the detail view
+- `uploads.list_documents(application_id)` + `uploads.document_url(doc)` — Stream D
+
+**Critical independence note:** Stream C does **not** wait for Stream A/B to build the applicant-side submit flow. Stream D's dev fixtures (`conftest.py` / `seed/dev_fixtures.py`) fabricate a submitted application with realistic answers — Stream C builds against that from hour one.
+
+**Done when:** logged in as the seeded assessor, all seeded submitted applications appear in the queue, each can be scored end-to-end, and the allocation dashboard shows ranked funding decisions against the £37m budget; `pytest tests/test_scoring.py tests/test_assessor.py` passes.
+
+### Workstream D — Platform, data & uploads
+
+**Deliverable:** every other stream has the data, fixtures, and file-handling
+primitives it needs. No other stream should write raw SQL, invent a test
+user, or touch the filesystem directly.
+
+**Owns (edit freely):**
+- `app/models.py` (additive column changes only; coordinate before renames)
+- `app/extensions.py`
+- `app/public.py` (landing page, `/healthz`, asset routing)
+- `app/uploads.py` (new — file save, serve, authorise; owns `Document` row creation)
+- `seed.py`, `seed/grants/*.json`, `seed/dev_fixtures.py` (new)
+- `app/forms/*.json` **for new grants** (schemas for EHCF forms are Stream B's to extend; new-grant onboarding is Stream D's)
+- `tests/conftest.py`, `tests/test_seed.py`, `tests/test_uploads.py`, `tests/test_dev_fixtures.py`
+- `config.py`, `Dockerfile`, `docker-compose.yml`, `app/static/**`
+
+**Ships:**
+- P2.3 Uploads to local filesystem — `save_upload(application, kind, file_storage) → Document`, `list_documents(application_id) → list[Document]`, `document_url(doc) → str`, `serve_document(doc_id)` route (authz-gated; applicant can read their own, assessor can read any submitted)
+- **Dev fixtures** (unblocks Stream C immediately): one seeded assessor, three seeded applicants, five applications covering the scenarios in `ideas/2026-04-16-1200-test-data-seed-script.md` (strong pass, borderline, auto-reject, low-score reject, eligibility fail). Exposed as pytest fixtures (`applicant_user`, `assessor_user`, `submitted_application`) and as a `python seed.py --dev` flag.
+- Any additive model changes other streams need (e.g. `Organisation.la_area` for queue filters, `Document.description`). Land via a one-line PR tagged `models`.
+- P4.1 Second grant — Common Ground Award: `seed/grants/common-ground.json` + `app/forms/common-ground-application-v1.json` + assessment schema. Exposes any hardcoded EHCF assumptions for the other streams to flush out.
+- C5 audit trail (stretch) — `created_by` / `updated_by` / change-log on `Application`, `Assessment` transitions
+- Deploy polish — prod `docker compose up` ends at a browser-visible demo URL
+
+**Public API this stream exposes** (add to `CONTRIBUTING.md`):
+
+```python
+from app.uploads import save_upload, list_documents, document_url
+```
+
+Plus fixtures other streams use in tests:
+
+```python
+# tests/conftest.py
+@pytest.fixture
+def applicant_user(db, seeded_grant): ...
+@pytest.fixture
+def assessor_user(db): ...
+@pytest.fixture
+def submitted_application(db, seeded_grant, applicant_user): ...
+```
+
+**Imports from other streams:** none — Stream D is upstream of everyone.
+
+**Done when:** `python seed.py --dev` populates a DB ready to demo end-to-end with zero manual clicking; `pytest` passes; `docker compose up` serves a browser-visible app at `:8000`.
+
+---
+
+## Dependency map (so nothing blocks)
+
+```
+D (models, uploads, fixtures) ──► A (auth, applicant routes) ──► demo
+       │                               │
+       ├─► B (forms_runner, macros) ───┤
+       │           │
+       │           └─► C (assessor views that include forms/summary.html)
+       └─► C (assessor, scoring) ──────► demo
+```
+
+- **A imports from B and D.** Stubs for every B/D symbol are in the repo now,
+  so A can build to 100% of its brief without either ever merging.
+- **B imports from nothing.** Pure helpers + templates. B is trivially
+  parallel.
+- **C imports from A (decorator only), B (summary partial only), D (models + fixtures + uploads).** All stubs / stable.
+- **D imports from nothing.** Upstream.
+
+The **only real sequencing risk** is Stream D shipping its `conftest.py`
+fixtures before Stream C starts writing assessor tests. If Stream D slips,
+Stream C fabricates a local fixture in their own test file, then deletes it
+in the PR that consumes D's shared one.
 
 ---
 
