@@ -115,7 +115,10 @@ _DEMO_USERS = [
         "org_name": "Demo Organisation",
     },
     {
-        "email": "William.May@communities.gov.uk",
+        # Stored lower-cased to match the normalisation in auth.login /
+        # auth.register (both ``.strip().lower()`` the submitted email before
+        # DB lookup). The sign-in form accepts any case for this address.
+        "email": "william.may@communities.gov.uk",
         "password": "ABCDE12345",
         "role": UserRole.APPLICANT,
         "org_name": "William May Organisation",
