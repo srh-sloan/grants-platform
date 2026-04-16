@@ -146,6 +146,39 @@ nothing else in the factory.
   `forms_runner.py` and a Jinja macro under `templates/forms/`. Co-ordinate
   in Slack before starting — it's a contract change.
 
+## Hackathon requirements
+
+These are the non-negotiables for what we ship today.
+
+### Working interface — usable, accessible, GOV.UK styled
+
+- The app must be navigable end-to-end by a real user, not just runnable by a developer.
+- Follow GOV.UK Frontend conventions throughout: use the provided macros and components, don't roll bespoke HTML where a GOV.UK component exists.
+- Remove the GOV.UK crown logo — this is a prototype, not an official government service.
+- All pages must meet basic accessibility standards: correct heading hierarchy, visible focus states, form labels associated with inputs, error messages linked to fields.
+- Error states and empty states must be handled — no raw stack traces or blank pages reaching the user.
+
+### Dependency hygiene — blueprint for keeping packages current
+
+- Before upgrading any package, check the release notes for breaking changes.
+- **GOV.UK Frontend**: download the new `govuk-frontend.min.css` and `govuk-frontend.min.js` from the [releases page](https://github.com/alphagov/govuk-frontend/releases), replace the files in `app/static/`, and smoke-test the header, footer, and at least one form page. Check the changelog for any macro API changes that affect our Jinja templates.
+- **Python deps**: run `uv sync` after editing `pyproject.toml`. Commit both `pyproject.toml` and the updated `uv.lock` in the same PR. Tag it `deps` in the title.
+- Never upgrade a dep as a side-effect of a feature PR — keep it a separate commit or PR so it's easy to revert.
+
+### Use agents, skills, and AI tools
+
+- AI is a first-class tool today, not a last resort. Use it for: drafting form schemas, generating seed data, writing scoring logic, producing boilerplate templates.
+- Prefer Claude Code skills (`/commit`, `/simplify`, `claude-api`) over writing the equivalent manually.
+- Where the app itself calls an AI (e.g. assessment assistance, application guidance), use the Anthropic SDK and structure prompts to be grant-agnostic — the prompt should read from grant config, not contain hardcoded EHCF references.
+- Log or surface AI-generated content clearly in the UI so assessors know when a suggestion came from a model.
+
+### Show domain knowledge — context and expertise in the product
+
+- The UI copy should reflect grant sector language: use terms like "applicant organisation", "funding criteria", "LA endorsement", "revenue vs capital funding" correctly.
+- Eligibility checks should show the user *why* they don't qualify, not just that they don't — reference the specific rule.
+- Assessment screens should display the grant's scoring guidance alongside the score input, drawn from `config_json`, so assessors don't need to consult the prospectus separately.
+- Where we summarise an application for an assessor, the summary should highlight the fields that carry the most scoring weight — again, derived from config, not hardcoded.
+
 ## Definition of done (per PR)
 
 Every PR, regardless of stream:

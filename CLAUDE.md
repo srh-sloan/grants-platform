@@ -14,6 +14,12 @@ like they were written by one team, not five individuals on different days.
 That means following the patterns in this file even when a different approach
 would be locally simpler.
 
+**Also read `CONTRIBUTING.md` before starting any task.** It contains the
+team's agreed hackathon requirements — working accessible interface, GOV.UK
+styling (no crown), dependency upgrade blueprint, AI tool usage, and domain
+knowledge standards. These apply to every piece of work, not just the streams
+that explicitly own those concerns.
+
 Before acting on any task:
 
 1. **Locate the task in `PLAN.md`.** Which phase? Which stream? If you can't
@@ -32,6 +38,11 @@ Before acting on any task:
    function) over reaching across and restructuring someone else's code.
 5. **Leave `main` runnable.** Every commit should boot the app and pass
    `pytest`. If a change can't land atomically, land a stub first.
+6. **Meet the hackathon requirements in `CONTRIBUTING.md`.** Before marking
+   any task done, check the four requirements: interface quality, dep hygiene,
+   AI tool use, and domain knowledge. If a slice touches UI, verify GOV.UK
+   macros are used and the crown is absent. If it calls an AI, confirm the
+   prompt reads from config.
 
 ## Project Overview
 
