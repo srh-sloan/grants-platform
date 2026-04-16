@@ -248,14 +248,18 @@ Goal: add a second grant without writing grant-specific Python. Expect to
 discover assumptions that baked EHCF shape into the code and refactor them
 out.
 
-- P4.1 Seed Common Ground Award (5 criteria, non-uniform weights, capital-only)
-- P4.2 Word-limit validator in form runner (Changing Futures)
-- P4.3 Conditional logic in JSON schema (EHCF capital → readiness fields)
-- P4.4 Partnership / lead-applicant schema (Local Digital)
-- P4.5 Multi-stage assessment: Pass/Fail eligibility + scored + Pass/Fail declaration
+- [x] P4.1 Seed Common Ground Award (5 criteria, non-uniform weights, capital-only) — Stream D (merged PR #50)
+- [x] P4.2 Word-limit validator in form runner (Changing Futures) — Stream B (merged)
+- [x] P4.3 Conditional logic in JSON schema (EHCF capital → readiness fields) — Stream B (merged PR #51)
+- [~] P4.4 Partnership / lead-applicant schema (Local Digital) — Stream B (PR #60)
+- [x] P4.5 Multi-stage assessment: Pass/Fail eligibility + scored + Pass/Fail declaration — Stream C (merged PR #53)
 
 Pick 2–3 of these based on time remaining; P4.1 is the best starter because it
 exposes the most assumptions for the least code.
+
+### Post-phase additions
+
+- [x] **About GrantOS page** (`GET /about`) — static informational page at `app/templates/public/about.html` covering all nine content sections (problem, surfaces, EHCF context, AI layer, hackathon challenges, scoring model, architecture, demo journey, roadmap). Uses GOV.UK Frontend components only; no custom CSS. Smoke test in `tests/test_smoke.py`. Header nav link added for all user states.
 
 ---
 

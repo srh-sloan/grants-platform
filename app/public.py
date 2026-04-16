@@ -32,6 +32,11 @@ def govuk_assets(filename: str):
     return send_from_directory(assets_dir, filename)
 
 
+@bp.get("/about")
+def about():
+    return render_template("public/about.html")
+
+
 @bp.get("/healthz")
 def healthz():
     """Liveness probe — returns 200 if the app and DB session are reachable."""

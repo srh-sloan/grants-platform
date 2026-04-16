@@ -636,3 +636,77 @@ up where the last one left off.
 `.claude/settings.json` pre-allows common commands (pytest, ruff, flask,
 git operations, gh CLI) so the orchestrator and sub-agents can run without
 manual permission prompts on every command.
+
+---
+
+## Known gotchas and UX patterns (from 2026-04-16 audit)
+
+### Date fields in `govukDateInput` — extraction and pre-fill
+
+**Trigger:** Any form page with a `date` field type.
+
+`govukDateInput` with `namePrefix=fid` submits three separate POST params:
+`fid-day`, `fid-month`, `fid-year`. The generic extractor pattern
+`form_data.get(fid)` returns `None`. The fix is in `_extract_field_values`
+(`app/applicant.py`) with an explicit `elif ftype == "date":` branch that
+reads the three sub-fields and assembles `YYYY-MM-DD`. The template must also
+split that stored value back into three items when pre-filling:
+```jinja
+{% set _dp = field_value.split("-") if (field_value and "-" in field_value) else [] %}
+{% set _day   = (_dp[2] | int | string) if _dp | length == 3 and _dp[2] else "" %}
+{% set _month = (_dp[1] | int | string) if _dp | length == 3 and _dp[1] else "" %}
+{% set _year  = _dp[0] if _dp | length == 3 and _dp[0] else "" %}
+```
+**Verify:** Save a date answer, navigate away, navigate back — values should be pre-filled.
+
+### Header sign-out requires a POST form (logout is POST-only)
+
+The `govukServiceNavigation` macro renders nav items as `<a>` tags (GET links).
+The `/auth/logout` route is POST-only for CSRF protection. The "Sign out" item
+in the header nav is therefore a broken GET link. The working sign-out is the
+`<form method="post">` button on the applicant dashboard.
+
+**Options if fixing:** (a) Accept GET on logout (simplest, low security risk),
+(b) Add a hidden form + JS click handler to intercept the nav link.
+
+### `govuk-!-background-colour-red` is not a valid GOV.UK utility class
+
+This class was used in `assessor/allocation.html` to highlight over-budget
+table rows. It does not exist in the vendored GOV.UK Frontend CSS. Use a
+custom class in `app/static/app.css` instead:
+```css
+.app-row--over-budget { background-color: #f3d3c9; }
+```
+
+### `partials/header.html` — unauthenticated nav was empty
+
+Before 2026-04-16, `_nav_items = []` for anonymous users. Now set to Sign in
++ Create account. Any future template work that needs unauthenticated nav
+items should update `header.html` line ~39 in the `{% else %}` block.
+
+### Landing page — dev content removed
+
+The `public/index.html` previously showed `Slug: <code>{{ grant.slug }}</code>`
+(debug info) and a dev-facing empty state ("Run python seed.py..."). Both have
+been removed. Empty state now reads "There are no grants open for applications
+at the moment. Check back soon."
+
+### `app/static/app.css` — custom utility classes
+
+Custom CSS that extends GOV.UK Frontend goes in `app/static/app.css` (Stream D
+owns it). Name classes with `app-` prefix to avoid collisions with `govuk-` classes.
+
+### Build status (2026-04-16 end of day)
+
+**Phases 0-4 complete.** All PLAN.md build items either merged or in PR #60.
+235 tests passing, 8 pre-existing failures (`test_assessor_ai.py` — missing
+`anthropic` SDK). The data-driven architecture proved out: adding Common Ground
+Award (P4.1) and Local Digital partnership schema (P4.4) required zero Python
+code changes.
+
+### Parallel orchestrator contention
+
+Two `/orchestrate` sessions running concurrently will dispatch overlapping work.
+The `.claude/orchestrator-claims.json` file was added to prevent this, but may
+not be active in all sessions. Always check open PRs (`gh pr list`) before
+creating new ones for the same tasks.
