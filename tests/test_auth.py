@@ -326,6 +326,17 @@ def test_logout_clears_session_and_redirects(client, make_user):
     assert "/auth/login" in after.headers["Location"]
 
 
+def test_logout_banner_is_shown_on_landing_page(client, make_user):
+    """Flashed confirmation must render on the redirect target (``/``), not the next page."""
+    _u, password = make_user(email="flash@x.test")
+    client.post("/auth/login", data={"email": "flash@x.test", "password": password})
+
+    response = client.post("/auth/logout", follow_redirects=True)
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "You have been signed out." in body
+
+
 def test_logout_requires_authentication(client):
     response = client.post("/auth/logout", follow_redirects=False)
     assert response.status_code == 302
