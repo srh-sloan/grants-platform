@@ -7,7 +7,25 @@
    Tudor Crown + wordmark, and this is a prototype, not an official government
    service (see CONTRIBUTING.md → "Working interface"). The service-navigation
    component is crown-free and carries our service name on its own. #}
+{% if current_user.is_authenticated %}
+  {% if current_user.role.value in ("assessor", "admin") %}
+    {% set _nav_items = [
+      {"href": url_for("assessor.queue"),      "text": "Queue"},
+      {"href": url_for("assessor.allocation"), "text": "Allocation"},
+      {"href": url_for("auth.logout"),         "text": "Sign out"}
+    ] %}
+  {% else %}
+    {% set _nav_items = [
+      {"href": url_for("applicant.dashboard"), "text": "My applications"},
+      {"href": url_for("auth.logout"),         "text": "Sign out"}
+    ] %}
+  {% endif %}
+{% else %}
+  {% set _nav_items = [] %}
+{% endif %}
+
 {{ govukServiceNavigation({
   "serviceName": "Grants platform",
-  "serviceUrl": url_for('public.index')
+  "serviceUrl": url_for('public.index'),
+  "navigation": _nav_items
 }) }}
