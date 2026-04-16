@@ -61,11 +61,11 @@
                 </td>
                 <td class="govuk-table__cell">
                   {% if app.status.value == "draft" %}
-                    <a class="govuk-link" href="{{ url_for('applicant.start', grant_slug=app.grant.slug) }}">
+                    <a class="govuk-link" href="{{ url_for('applicant.task_list', app_id=app.id) }}">
                       Continue<span class="govuk-visually-hidden"> application for {{ app.grant.name }}</span>
                     </a>
                   {% else %}
-                    <a class="govuk-link" href="{{ url_for('applicant.review', app_id=app.id) }}">
+                    <a class="govuk-link" href="{{ url_for('applicant.task_list', app_id=app.id) }}">
                       View<span class="govuk-visually-hidden"> application for {{ app.grant.name }}</span>
                     </a>
                   {% endif %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% from 'govuk_frontend_jinja/components/task-list/macro.html' import govukTaskList %}
+{% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
+{% from 'govuk_frontend_jinja/components/tag/macro.html' import govukTag %}
+
+{% block beforeContent %}
+  {{ super() }}
+  <a class="govuk-back-link" href="{{ url_for('applicant.dashboard') }}">Back to your applications</a>
+{% endblock %}
+
+{% block title %}{{ application.grant.name }} application{% endblock %}
+
+{% set STATUS_TAG = {
+  "not_started": {"text": "Not started", "classes": "govuk-tag--grey"},
+  "in_progress":  {"text": "In progress", "classes": "govuk-tag--light-blue"}
+} %}
+
+{% block content %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+
+    {% include "partials/notification_banners.html" %}
+
+    <span class="govuk-caption-l">{{ application.grant.name }}</span>
+    <h1 class="govuk-heading-xl">Your application</h1>
+
+    <p class="govuk-body">
+      You have completed
+      <strong>{{ tasks | selectattr('status', 'equalto', 'completed') | list | length }}</strong>
+      of <strong>{{ tasks | length }}</strong> sections.
+    </p>
+
+    {# Build task list items for the govukTaskList macro #}
+    {% set task_items = [] %}
+    {% for task in tasks %}
+      {% if task.status == "completed" %}
+        {% set status_obj = {"text": "Completed"} %}
+      {% else %}
+        {% set status_obj = {"tag": STATUS_TAG[task.status]} %}
+      {% endif %}
+      {% set _ = task_items.append({
+        "title": {"text": task.page.title},
+        "href": task.href,
+        "status": status_obj
+      }) %}
+    {% endfor %}
+
+    {{ govukTaskList({"items": task_items, "idPrefix": "section"}) }}
+
+    {% if application.status.value == "draft" %}
+
+      <h2 class="govuk-heading-m govuk-!-margin-top-6">Submit your application</h2>
+
+      {% if all_complete %}
+        <p class="govuk-body">
+          All sections are complete. Before submitting, you can
+          <a class="govuk-link" href="{{ url_for('applicant.review', app_id=application.id) }}">review your answers</a>.
+        </p>
+        <form method="post" action="{{ url_for('applicant.submit', app_id=application.id) }}">
+          {{ submit_form.hidden_tag() }}
+          {{ govukButton({
+            "text": "Submit application",
+            "attributes": {"data-testid": "submit-application"}
+          }) }}
+        </form>
+      {% else %}
+        <p class="govuk-body govuk-hint">
+          You must complete all sections before you can submit your application.
+        </p>
+        {{ govukButton({
+          "text": "Submit application",
+          "disabled": true
+        }) }}
+      {% endif %}
+
+    {% else %}
+      {# Post-submission — read-only view #}
+      <p class="govuk-body govuk-!-margin-top-6">
+        <a class="govuk-link" href="{{ url_for('applicant.review', app_id=application.id) }}">View your submitted answers</a>
+      </p>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

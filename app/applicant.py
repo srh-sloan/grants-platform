@@ -10,9 +10,10 @@ URL prefix: ``/apply``. Stable contracts:
 
 - ``GET  /apply/``                          → :func:`dashboard`
 - ``GET  /apply/<grant_slug>/start``        → :func:`start` (create/open a draft)
+- ``GET  /apply/<app_id>/tasks``            → :func:`task_list` (section status + submit)
 - ``GET  /apply/<app_id>/<page_id>``        → :func:`form_page` (render)
 - ``POST /apply/<app_id>/<page_id>``        → :func:`save_page` (save draft)
-- ``GET  /apply/<app_id>/review``           → :func:`review`
+- ``GET  /apply/<app_id>/review``           → :func:`review` (read-only summary)
 - ``POST /apply/<app_id>/submit``           → :func:`submit`
 """
 
@@ -414,17 +415,9 @@ def start(grant_slug: str):
     else:
         form = _application_form(application)
 
-    # Submitted applications go straight to the read-only review page.
-    if application.status != ApplicationStatus.DRAFT:
-        return redirect(url_for("applicant.review", app_id=application.id))
-
-    return redirect(
-        url_for(
-            "applicant.form_page",
-            app_id=application.id,
-            page_id=_resume_page_id(application, form),
-        )
-    )
+    # All applications land on the task list. The task list handles routing
+    # to the review page for submitted applications.
+    return redirect(url_for("applicant.task_list", app_id=application.id))
 
 
 def _render_form_page(
@@ -466,6 +459,49 @@ def _render_form_page(
         total_pages=len(all_pages),
     )
     return (rendered, status_code) if status_code != 200 else rendered
+
+
+@bp.get("/<int:app_id>/tasks")
+@applicant_required
+def task_list(app_id: int):
+    """Task list — section-by-section status overview and submit entry point."""
+    application = _get_owned_application(app_id)
+    form = _application_form(application)
+
+    pages = list_pages(form.schema_json)
+    answers = application.answers_json or {}
+    errors_by_page = _page_errors_across_form(application, form)
+
+    tasks = []
+    for page in pages:
+        pid = page["id"]
+        page_answers = answers.get(pid, {})
+        if not page_answers:
+            status = "not_started"
+        elif pid in errors_by_page:
+            status = "in_progress"
+        else:
+            status = "completed"
+        tasks.append({
+            "page": page,
+            "status": status,
+            "href": url_for("applicant.form_page", app_id=app_id, page_id=pid)
+            if application.status == ApplicationStatus.DRAFT else None,
+        })
+
+    all_complete = (
+        application.status == ApplicationStatus.DRAFT
+        and not errors_by_page
+        and all(t["status"] == "completed" for t in tasks)
+    )
+
+    return render_template(
+        "applicant/task_list.html",
+        application=application,
+        tasks=tasks,
+        all_complete=all_complete,
+        submit_form=_ActionForm(),
+    )
 
 
 @bp.get("/<int:app_id>/<page_id>")
@@ -558,13 +594,10 @@ def save_page(app_id: int, page_id: str):
     )
     db.session.commit()
 
-    next_id = next_page_id(form.schema_json, page_id)
-    if next_id:
-        return redirect(
-            url_for("applicant.form_page", app_id=app_id, page_id=next_id)
-        )
-    # End of form — push the applicant to the read-only review / submit page.
-    return redirect(url_for("applicant.review", app_id=app_id))
+    # Return to the task list after every successful page save.
+    # The task list shows what's done and what remains, and is the entry point
+    # for the submit action — keeping review separate from submission.
+    return redirect(url_for("applicant.task_list", app_id=app_id))
 
 
 @bp.get("/<int:app_id>/review")
@@ -575,14 +608,6 @@ def review(app_id: int):
     form = _application_form(application)
     documents = list_documents(application.id)
 
-    errors_by_page = _page_errors_across_form(application, form)
-    pages_remaining = [
-        page for page in list_pages(form.schema_json) if page["id"] in errors_by_page
-    ]
-    can_submit = (
-        application.status == ApplicationStatus.DRAFT and not errors_by_page
-    )
-
     return render_template(
         "applicant/review.html",
         application=application,
@@ -590,10 +615,6 @@ def review(app_id: int):
         schema=form.schema_json,
         answers=application.answers_json or {},
         documents=documents,
-        errors_by_page=errors_by_page,
-        pages_remaining=pages_remaining,
-        can_submit=can_submit,
-        submit_form=_ActionForm(),
     )
 
 
@@ -604,17 +625,17 @@ def submit(app_id: int):
     application = _get_owned_application(app_id)
     if application.status != ApplicationStatus.DRAFT:
         flash("This application has already been submitted.", "info")
-        return redirect(url_for("applicant.review", app_id=app_id))
+        return redirect(url_for("applicant.task_list", app_id=app_id))
 
     form = _application_form(application)
     errors_by_page = _page_errors_across_form(application, form)
     if errors_by_page:
         flash(
-            "You still have pages with missing or invalid answers. "
+            "You still have sections with missing or invalid answers. "
             "Complete them before submitting.",
             "error",
         )
-        return redirect(url_for("applicant.review", app_id=app_id))
+        return redirect(url_for("applicant.task_list", app_id=app_id))
 
     application.status = ApplicationStatus.SUBMITTED
     application.submitted_at = datetime.now(UTC)
@@ -633,4 +654,4 @@ def submit(app_id: int):
         "We'll be in touch once it has been assessed.",
         "success",
     )
-    return redirect(url_for("applicant.review", app_id=app_id))
+    return redirect(url_for("applicant.task_list", app_id=app_id))

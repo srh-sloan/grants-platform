@@ -2,17 +2,14 @@
 
 {% block beforeContent %}
   {{ super() }}
-  <a class="govuk-back-link" href="{{ url_for('applicant.dashboard') }}">Back to your applications</a>
+  <a class="govuk-back-link" href="{{ url_for('applicant.task_list', app_id=application.id) }}">Back to application overview</a>
 {% endblock %}
 
-{% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
-{% from 'govuk_frontend_jinja/components/tag/macro.html' import govukTag %}
-{% from 'govuk_frontend_jinja/components/error-summary/macro.html' import govukErrorSummary %}
 {% from 'govuk_frontend_jinja/components/panel/macro.html' import govukPanel %}
 
 {% block title %}
   {% if application.status.value == "draft" %}
-    Review your application
+    Your answers
   {% else %}
     Application summary
   {% endif %}
@@ -31,64 +28,19 @@
       {% endif %}
 
       <span class="govuk-caption-l">{{ application.grant.name }}</span>
-      <h1 class="govuk-heading-xl">
-        {% if application.status.value == "draft" %}
-          Check your answers before submitting
-        {% else %}
-          Application summary
-        {% endif %}
-      </h1>
-
-      <p class="govuk-body">
-        Status:
-        {% if application.status.value == "draft" %}
-          {{ govukTag({"text": "Draft", "classes": "govuk-tag--blue"}) }}
-        {% elif application.status.value == "submitted" %}
-          {{ govukTag({"text": "Submitted", "classes": "govuk-tag--purple"}) }}
-        {% elif application.status.value == "under_review" %}
-          {{ govukTag({"text": "Under review", "classes": "govuk-tag--yellow"}) }}
-        {% elif application.status.value == "approved" %}
-          {{ govukTag({"text": "Approved", "classes": "govuk-tag--green"}) }}
-        {% elif application.status.value == "rejected" %}
-          {{ govukTag({"text": "Not funded", "classes": "govuk-tag--red"}) }}
-        {% endif %}
-      </p>
-
-      {% if application.status.value == "draft" and pages_remaining %}
-        {% set pending_items = [] %}
-        {% for page in pages_remaining %}
-          {% set _ = pending_items.append({
-            "text": page.title,
-            "href": url_for('applicant.form_page', app_id=application.id, page_id=page.id)
-          }) %}
-        {% endfor %}
-        {{ govukErrorSummary({
-          "titleText": "Your application is not yet complete",
-          "descriptionText": "These pages still have required fields to fill in. Complete them, then submit.",
-          "errorList": pending_items
-        }) }}
-      {% endif %}
+      <h1 class="govuk-heading-xl">Your answers</h1>
 
       {#
-        Stream B owns the final ``templates/forms/summary.html`` partial
-        (pinned contract — see CONTRIBUTING.md). Until Stream B ships its
-        version, Stream A renders a compatible inline summary below so the
-        review page is usable. When Stream B's summary.html is ready, swap
-        this ``inline_summary`` block for: {% include "forms/summary.html" %}.
+        Stream B owns the final ``templates/forms/summary.html`` partial.
+        Until it ships, Stream A renders the inline summary.
       #}
       {% include "applicant/_inline_summary.html" %}
 
-      {% if can_submit %}
-        <div class="govuk-button-group govuk-!-margin-top-6">
-          <form method="post" action="{{ url_for('applicant.submit', app_id=application.id) }}">
-            {{ submit_form.hidden_tag() }}
-            {{ govukButton({
-              "text": "Accept and submit application",
-              "attributes": {"data-testid": "submit-application"}
-            }) }}
-          </form>
-        </div>
-      {% endif %}
+      <div class="govuk-!-margin-top-6">
+        <a class="govuk-link" href="{{ url_for('applicant.task_list', app_id=application.id) }}">
+          Return to application overview
+        </a>
+      </div>
     </div>
   </div>
 {% endblock %}

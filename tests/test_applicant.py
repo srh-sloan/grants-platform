@@ -198,7 +198,7 @@ def test_dashboard_redirects_anonymous_to_login(client):
 # ---------------------------------------------------------------------------
 
 
-def test_start_creates_draft_and_redirects_to_first_page(
+def test_start_creates_draft_and_redirects_to_task_list(
     client, applicant, seeded_ehcf, db
 ):
     _login(client, applicant)
@@ -206,8 +206,7 @@ def test_start_creates_draft_and_redirects_to_first_page(
     response = client.get("/apply/ehcf/start", follow_redirects=False)
     assert response.status_code == 302
     location = response.headers["Location"]
-    assert "/apply/" in location
-    assert "/organisation" in location  # first page id in the EHCF schema
+    assert "/tasks" in location
 
     apps = db.session.execute(
         select(Application).where(Application.org_id == applicant.org_id)
@@ -265,7 +264,7 @@ def test_start_on_submitted_application_goes_to_review(
 
     response = client.get("/apply/ehcf/start", follow_redirects=False)
     assert response.status_code == 302
-    assert f"/apply/{app.id}/review" in response.headers["Location"]
+    assert f"/apply/{app.id}/tasks" in response.headers["Location"]
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +367,7 @@ def test_save_page_persists_draft_and_advances(
         follow_redirects=False,
     )
     assert response.status_code == 302
-    assert "/proposal" in response.headers["Location"]  # next page
+    assert "/tasks" in response.headers["Location"]  # returns to task list
 
     db.session.refresh(app)
     assert "organisation" in app.answers_json
@@ -466,7 +465,7 @@ def test_save_page_on_submitted_application_is_blocked(
     assert app.answers_json in ({}, None)
 
 
-def test_last_page_redirects_to_review(client, applicant, seeded_ehcf):
+def test_last_page_redirects_to_task_list(client, applicant, seeded_ehcf):
     app = _start_application(client, applicant, seeded_ehcf)
     response = client.post(
         f"/apply/{app.id}/declaration",
@@ -478,7 +477,7 @@ def test_last_page_redirects_to_review(client, applicant, seeded_ehcf):
         follow_redirects=False,
     )
     assert response.status_code == 302
-    assert "/review" in response.headers["Location"]
+    assert "/tasks" in response.headers["Location"]
 
 
 def test_draft_persists_across_login_cycles(
@@ -569,17 +568,17 @@ def test_review_page_renders_answers(client, applicant, seeded_ehcf):
     response = client.get(f"/apply/{app.id}/review")
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Check your answers" in body
+    assert "Your answers" in body
     assert "Shelter Bristol" in body
     assert "Pathways Out" in body
     assert "answers-summary" in body
+    # Submit button is on the task list, not the review page.
+    assert "submit-application" not in body
 
 
-def test_review_page_lists_missing_pages_for_incomplete_draft(
-    client, applicant, seeded_ehcf
-):
+def test_task_list_shows_section_statuses(client, applicant, seeded_ehcf):
     app = _start_application(client, applicant, seeded_ehcf)
-    # Intentionally skip most pages.
+    # Fill one section only.
     client.post(
         f"/apply/{app.id}/organisation",
         data={
@@ -591,11 +590,23 @@ def test_review_page_lists_missing_pages_for_incomplete_draft(
             "operates_in_england": "yes",
         },
     )
-    response = client.get(f"/apply/{app.id}/review")
+    response = client.get(f"/apply/{app.id}/tasks")
+    assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "not yet complete" in body
-    # Submit button must NOT appear when pages are incomplete.
+    assert "Completed" in body
+    assert "Not started" in body
+    # Submit button must NOT appear when sections are incomplete.
     assert "submit-application" not in body
+
+
+def test_task_list_shows_submit_when_all_complete(client, applicant, seeded_ehcf):
+    app = _start_application(client, applicant, seeded_ehcf)
+    _fill_all_pages(client, app.id)
+
+    response = client.get(f"/apply/{app.id}/tasks")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "submit-application" in body
 
 
 def test_submit_transitions_complete_draft_to_submitted(
@@ -606,7 +617,7 @@ def test_submit_transitions_complete_draft_to_submitted(
 
     response = client.post(f"/apply/{app.id}/submit", follow_redirects=False)
     assert response.status_code == 302
-    assert f"/apply/{app.id}/review" in response.headers["Location"]
+    assert f"/apply/{app.id}/tasks" in response.headers["Location"]
 
     db.session.refresh(app)
     assert app.status == ApplicationStatus.SUBMITTED
@@ -632,7 +643,7 @@ def test_submit_rejects_incomplete_application(
 
     response = client.post(f"/apply/{app.id}/submit", follow_redirects=False)
     assert response.status_code == 302
-    assert f"/apply/{app.id}/review" in response.headers["Location"]
+    assert f"/apply/{app.id}/tasks" in response.headers["Location"]
 
     db.session.refresh(app)
     assert app.status == ApplicationStatus.DRAFT

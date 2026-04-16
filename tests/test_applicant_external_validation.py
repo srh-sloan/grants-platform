@@ -229,7 +229,7 @@ def test_save_page_passes_when_charity_number_matches(
         follow_redirects=False,
     )
     assert response.status_code == 302
-    assert "/proposal" in response.headers["Location"]
+    assert "/tasks" in response.headers["Location"]
 
 
 def test_save_page_rejects_unknown_registration_number(
