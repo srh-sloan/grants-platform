@@ -222,6 +222,93 @@ def test_admin_save_grant(admin_client, db):
     assert Grant.query.filter_by(slug="test-grant").count() == 1
 
 
+def _make_draft_grant(db, slug="draft-grant", with_forms=True, weight_total=100):
+    """Helper: create a draft grant with valid criteria and optionally an application form."""
+    from app.models import Form, FormKind, Grant, GrantStatus
+
+    criteria = [{"id": "quality", "label": "Quality", "weight": weight_total, "max": 3, "auto_reject_on_zero": False}]
+    grant = Grant(
+        slug=slug,
+        name="Draft Grant",
+        status=GrantStatus.DRAFT,
+        config_json={
+            "slug": slug,
+            "criteria": criteria,
+            "eligibility": [{"id": "org_type", "type": "in", "label": "Org type", "values": ["charity"]}],
+        },
+    )
+    db.session.add(grant)
+    db.session.flush()
+    if with_forms:
+        db.session.add(Form(grant_id=grant.id, kind=FormKind.APPLICATION, version=1, schema_json={"pages": []}))
+    db.session.commit()
+    return grant
+
+
+def test_grant_detail_page(admin_client, db):
+    grant = _make_draft_grant(db)
+    resp = admin_client.get(f"/admin/grants/{grant.id}")
+    assert resp.status_code == 200
+    assert b"Draft Grant" in resp.data
+    assert b"Publish grant" in resp.data
+
+
+def test_publish_valid_grant(admin_client, db):
+    from app.models import Grant, GrantStatus
+
+    grant = _make_draft_grant(db)
+    resp = admin_client.post(f"/admin/grants/{grant.id}/publish")
+    assert resp.status_code == 302
+    db.session.refresh(grant)
+    assert grant.status == GrantStatus.OPEN
+
+
+def test_publish_blocked_bad_weights(admin_client, db):
+    from app.models import GrantStatus
+
+    grant = _make_draft_grant(db, slug="bad-weights", weight_total=50)
+    resp = admin_client.post(f"/admin/grants/{grant.id}/publish")
+    assert resp.status_code == 302
+    db.session.refresh(grant)
+    assert grant.status == GrantStatus.DRAFT  # unchanged
+
+
+def test_publish_blocked_no_form(admin_client, db):
+    from app.models import GrantStatus
+
+    grant = _make_draft_grant(db, slug="no-form", with_forms=False)
+    resp = admin_client.post(f"/admin/grants/{grant.id}/publish")
+    assert resp.status_code == 302
+    db.session.refresh(grant)
+    assert grant.status == GrantStatus.DRAFT  # unchanged
+
+
+def test_close_open_grant(admin_client, db):
+    from app.models import Grant, GrantStatus
+
+    grant = _make_draft_grant(db, slug="open-grant")
+    grant.status = GrantStatus.OPEN
+    db.session.commit()
+
+    resp = admin_client.post(f"/admin/grants/{grant.id}/close")
+    assert resp.status_code == 302
+    db.session.refresh(grant)
+    assert grant.status == GrantStatus.CLOSED
+
+
+def test_publish_already_open_is_noop(admin_client, db):
+    from app.models import Grant, GrantStatus
+
+    grant = _make_draft_grant(db, slug="already-open")
+    grant.status = GrantStatus.OPEN
+    db.session.commit()
+
+    resp = admin_client.post(f"/admin/grants/{grant.id}/publish")
+    assert resp.status_code == 302
+    db.session.refresh(grant)
+    assert grant.status == GrantStatus.OPEN  # unchanged, error flashed
+
+
 def test_admin_forbidden_for_applicant(app, db):
     from app.models import User, UserRole
     from werkzeug.security import generate_password_hash

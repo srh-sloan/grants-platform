@@ -2,19 +2,16 @@
 
 Routes
 ------
-GET  /admin/                    admin landing (list of grants)
-GET  /admin/grants/import       upload prospectus form
-POST /admin/grants/import       process upload, run AI extraction, show preview
-GET  /admin/grants/template.csv download the CSV prospectus template
-POST /admin/grants/save         save a reviewed grant config + form schemas to DB
+GET  /admin/                      admin landing (list of grants)
+GET  /admin/grants/<id>           grant detail + publish/close controls
+POST /admin/grants/<id>/publish   publish a draft grant (draft → open)
+POST /admin/grants/<id>/close     close a live grant (open → closed)
+GET  /admin/grants/import         upload prospectus form
+POST /admin/grants/import         process upload, run AI extraction, show preview
+GET  /admin/grants/template.csv   download the CSV prospectus template
+POST /admin/grants/save           save a reviewed grant config + form schemas to DB
 
 All routes require the ADMIN role.
-
-This is a spike (Phase 4 / E-stream feature). The happy path is:
-  1. Admin uploads a prospectus CSV or pastes free text.
-  2. System calls Claude to generate grant_config + application_schema.
-  3. Admin reviews and edits the JSON in the preview page.
-  4. Admin clicks Save → Grant (draft) + Form records are written to the DB.
 """
 
 from __future__ import annotations
@@ -38,6 +35,10 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.models import Form, FormKind, Grant, GrantStatus, UserRole
 from app.prospectus_parser import generate_grant_artifacts, parse_prospectus_csv
+
+# Transitions allowed per current status.
+_PUBLISH_FROM = {GrantStatus.DRAFT}
+_CLOSE_FROM = {GrantStatus.OPEN}
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -110,6 +111,78 @@ criterion,value_for_money,Value for money,10,3,false
 def index():
     grants = Grant.query.order_by(Grant.name).all()
     return render_template("admin/index.html", grants=grants)
+
+
+@bp.route("/grants/<int:grant_id>")
+@admin_required
+def grant_detail(grant_id: int):
+    grant = db.get_or_404(Grant, grant_id)
+    criteria = grant.config_json.get("criteria", [])
+    eligibility = grant.config_json.get("eligibility", [])
+    award_ranges = grant.config_json.get("award_ranges", {})
+    timeline = grant.config_json.get("timeline", {})
+    weight_total = sum(c.get("weight", 0) for c in criteria)
+    forms = Form.query.filter_by(grant_id=grant.id).order_by(Form.kind).all()
+    return render_template(
+        "admin/grant_detail.html",
+        grant=grant,
+        criteria=criteria,
+        eligibility=eligibility,
+        award_ranges=award_ranges,
+        timeline=timeline,
+        weight_total=weight_total,
+        forms=forms,
+        can_publish=grant.status in _PUBLISH_FROM,
+        can_close=grant.status in _CLOSE_FROM,
+    )
+
+
+@bp.post("/grants/<int:grant_id>/publish")
+@admin_required
+def publish_grant(grant_id: int):
+    grant = db.get_or_404(Grant, grant_id)
+    if grant.status not in _PUBLISH_FROM:
+        flash(f"'{grant.name}' cannot be published from status '{grant.status.value}'.", "error")
+        return redirect(url_for("admin.grant_detail", grant_id=grant_id))
+
+    # Validate minimum requirements before going live.
+    criteria = grant.config_json.get("criteria", [])
+    eligibility = grant.config_json.get("eligibility", [])
+    app_form = Form.query.filter_by(grant_id=grant.id, kind=FormKind.APPLICATION).first()
+
+    errors = []
+    if not criteria:
+        errors.append("Grant has no scoring criteria — add at least one before publishing.")
+    elif sum(c.get("weight", 0) for c in criteria) != 100:
+        errors.append("Criterion weights do not sum to 100 — fix the grant config before publishing.")
+    if not eligibility:
+        errors.append("Grant has no eligibility rules defined.")
+    if app_form is None:
+        errors.append("No application form found — the grant cannot be applied for without one.")
+
+    if errors:
+        for msg in errors:
+            flash(msg, "error")
+        return redirect(url_for("admin.grant_detail", grant_id=grant_id))
+
+    grant.status = GrantStatus.OPEN
+    db.session.commit()
+    flash(f"'{grant.name}' is now live and open for applications.", "success")
+    return redirect(url_for("admin.grant_detail", grant_id=grant_id))
+
+
+@bp.post("/grants/<int:grant_id>/close")
+@admin_required
+def close_grant(grant_id: int):
+    grant = db.get_or_404(Grant, grant_id)
+    if grant.status not in _CLOSE_FROM:
+        flash(f"'{grant.name}' is not currently open.", "error")
+        return redirect(url_for("admin.grant_detail", grant_id=grant_id))
+
+    grant.status = GrantStatus.CLOSED
+    db.session.commit()
+    flash(f"'{grant.name}' has been closed. No new applications will be accepted.", "success")
+    return redirect(url_for("admin.grant_detail", grant_id=grant_id))
 
 
 @bp.route("/grants/template.csv")
