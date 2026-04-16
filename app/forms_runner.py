@@ -29,6 +29,16 @@ AND a new Jinja macro — coordinate across streams before doing so):
 
 ``text``, ``textarea``, ``radio``, ``checkbox``, ``select``, ``number``,
 ``currency``, ``date``, ``file``.
+
+Field type extensions:
+
+``textarea`` fields may include::
+
+    "word_limit": 500    — optional int, validation error if answer exceeds N words
+
+Word count is ``len(value.split())``: whitespace-separated tokens.  The check
+only runs when the field has a non-empty value; a blank value on a required
+textarea reports a required error, not a word-count error.
 """
 
 from __future__ import annotations
@@ -88,8 +98,13 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
     Returns a mapping of ``field_id -> error message`` for invalid fields.
     An empty dict means the submission is valid.
 
-    Phase 1 scope: required-field check only. Stream B expands to cover
-    numeric ranges, word limits, conditional logic in later phases.
+    Checks performed (in order per field):
+
+    1. **Required** — if ``required`` is true and the value is blank/absent.
+    2. **Word limit** — if ``type`` is ``textarea`` and ``word_limit`` is set,
+       the answer must not exceed that many whitespace-separated tokens.
+       Word-limit is only checked when the field has a non-empty value so it
+       never double-reports alongside the required error.
     """
     errors: dict[str, str] = {}
     for field in page.get("fields") or []:
@@ -97,8 +112,28 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
             raise ValueError(
                 f"Field {field.get('id')!r} has unsupported type {field.get('type')!r}"
             )
-        if field.get("required") and not _has_value(submitted.get(field["id"])):
-            errors[field["id"]] = "This field is required"
+        field_id: str = field["id"]
+        value = submitted.get(field_id)
+
+        # 1. Required check — runs first; if it fires we skip word-limit.
+        if field.get("required") and not _has_value(value):
+            errors[field_id] = "This field is required"
+            continue
+
+        # 2. Word-limit check — textarea only, only when a non-empty value exists.
+        if (
+            field.get("type") == "textarea"
+            and "word_limit" in field
+            and _has_value(value)
+        ):
+            word_limit: int = field["word_limit"]
+            actual_count = len(str(value).split())
+            if actual_count > word_limit:
+                errors[field_id] = (
+                    f"Answer must be {word_limit} words or fewer"
+                    f" (your answer is {actual_count} words)"
+                )
+
     return errors
 
 

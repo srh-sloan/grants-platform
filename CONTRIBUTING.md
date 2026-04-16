@@ -53,6 +53,10 @@ Pure functions — no Flask, no DB. See the module docstring for the schema
 contract. Supported field types are frozen; adding one requires coordinating
 with Stream A (template macro) and Stream D (model implications, if any).
 
+`validate_page(page, submitted) -> dict[str, str]` checks required fields and,
+for `textarea` fields that carry `"word_limit": int`, enforces that the answer
+does not exceed that many whitespace-separated words.
+
 Stream B also owns two shared Jinja templates (render from any blueprint):
 
 - `templates/forms/page.html` — a single form page. Context:
@@ -120,7 +124,7 @@ Change any of these and every stream breaks. Propose in `#grants` first.
 
 | Contract | Owned by | Location |
 |---|---|---|
-| Form schema shape (pages/fields) | Stream B | `app/forms/ehcf-application-v1.json` + `app/forms_runner.py` docstring |
+| Form schema shape (pages/fields) | Stream B | `app/forms/ehcf-application-v1.json` + `app/forms_runner.py` docstring — `textarea` fields may include optional `"word_limit": int` validated by `validate_page` |
 | Grant config shape (criteria/eligibility/etc) | Stream D | `seed/grants/ehcf.json` + `seed.py::validate_grant_config` |
 | Eligibility rule shape (`type`, `value`/`values`) | Stream D (shape) + Stream B (evaluator) | `seed/grants/ehcf.json` + `app/forms_runner.py::evaluate_eligibility` |
 | Status enums | Stream D | `app/models.py` |
