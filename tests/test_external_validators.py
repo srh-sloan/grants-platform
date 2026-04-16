@@ -118,9 +118,7 @@ class TestFindThatCharity:
         assert fetcher.calls[0][0] == "https://ftc.test/charity/1234567.json"
 
     def test_tolerates_mixed_punctuation_and_whitespace(self):
-        validator, _ = self._validator(
-            {"https://ftc.test/charity/1234567.json": {"name": "OK"}}
-        )
+        validator, _ = self._validator({"https://ftc.test/charity/1234567.json": {"name": "OK"}})
         assert validator.validate(" 1234567 ", {"org_type": "charity"}).ok
         assert validator.validate("1,234,567", {"org_type": "charity"}).ok
 
@@ -139,12 +137,8 @@ class TestFindThatCharity:
         # applicant rather than silently letting them through.
         validator, _ = self._validator(
             {
-                "https://ftc.test/charity/1234567.json": ExternalValidatorError(
-                    "HTTP 503"
-                ),
-                "https://ftc.test/company/1234567.json": ExternalValidatorError(
-                    "HTTP 503"
-                ),
+                "https://ftc.test/charity/1234567.json": ExternalValidatorError("HTTP 503"),
+                "https://ftc.test/company/1234567.json": ExternalValidatorError("HTTP 503"),
             }
         )
         result = validator.validate("1234567", {"org_type": "charity"})
@@ -174,11 +168,7 @@ class TestFindThatCharity:
 
     def test_extracts_org_name_from_alternative_keys(self):
         validator, _ = self._validator(
-            {
-                "https://ftc.test/charity/1234567.json": {
-                    "organisation_name": "Homes First"
-                }
-            }
+            {"https://ftc.test/charity/1234567.json": {"organisation_name": "Homes First"}}
         )
         result = validator.validate("1234567", {"org_type": "charity"})
         assert result.metadata["name"] == "Homes First"
@@ -255,9 +245,7 @@ class TestCompaniesHouse:
         assert "valid" in result.message.lower()
 
     def test_skips_on_transport_error(self):
-        fetcher = FakeFetcher(
-            {"https://api.test/company/12345678": ExternalValidatorError("boom")}
-        )
+        fetcher = FakeFetcher({"https://api.test/company/12345678": ExternalValidatorError("boom")})
         validator = CompaniesHouseValidator(
             api_key="test-key",
             fetcher=fetcher,
@@ -320,9 +308,7 @@ def test_runner_returns_empty_when_no_external_validator_configured():
 
 
 def test_runner_invokes_validator_and_passes_context():
-    stub = _StubValidator(
-        "stub_ok", ValidationResult(ok=True, metadata={"name": "X Charity"})
-    )
+    stub = _StubValidator("stub_ok", ValidationResult(ok=True, metadata={"name": "X Charity"}))
     errors, metadata = validate_page_external(
         PAGE,
         {"org_type": "charity", "registration_number": "1234567"},
@@ -369,9 +355,7 @@ def test_runner_skips_blank_values():
 
 
 def test_runner_skipped_results_do_not_error():
-    stub = _StubValidator(
-        "stub_ok", ValidationResult(ok=True, skipped=True, message="later")
-    )
+    stub = _StubValidator("stub_ok", ValidationResult(ok=True, skipped=True, message="later"))
     errors, _ = validate_page_external(
         PAGE,
         {"org_type": "charity", "registration_number": "1234567"},

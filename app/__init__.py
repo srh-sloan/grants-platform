@@ -31,20 +31,7 @@ _BLUEPRINT_MODULES: tuple[str, ...] = (
 def create_app(config_class: str | type = "config.Config") -> Flask:
     app = Flask(__name__)
     app.config.from_object(config_class)
-
-    # Warn loudly when the insecure default key slips through to a non-dev run.
-    if (
-        not app.debug
-        and not app.testing
-        and app.config["SECRET_KEY"] == "dev-secret-change-me"
-    ):
-        import warnings
-
-        warnings.warn(
-            "FLASK_SECRET_KEY is not set — using insecure default. "
-            "Set FLASK_SECRET_KEY in production.",
-            stacklevel=2,
-        )
+    _enforce_secret_key(app)
 
     _install_jinja_loaders(app)
     WTFormsHelpers(app)
@@ -64,13 +51,18 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
             cursor.close()
 
     login_manager.init_app(app)
-    limiter.init_app(app)
     login_manager.login_view = "auth.login"
     # Suppress Flask-Login's default "Please log in to access this page." flash.
     # The sign-in page already explains its purpose and ``next=`` preserves the
     # originally requested URL, so the banner is redundant noise on /auth/login.
     login_manager.login_message = None
     csrf.init_app(app)
+    # Rate limiter is disabled under TESTING so the auth/test suite can hammer
+    # /auth/login without tripping it. Per-route limits are applied in
+    # ``app.auth`` via ``@limiter.limit(...)``.
+    limiter.init_app(app)
+    if app.config.get("TESTING"):
+        limiter.enabled = False
 
     # Register models + user loader on the extension (both need the app context).
     with app.app_context():
@@ -99,6 +91,24 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     return app
+
+
+def _enforce_secret_key(app: Flask) -> None:
+    """Refuse to boot with the dev-only fallback secret in a prod-ish run.
+
+    ``FLASK_DEBUG`` or ``TESTING`` opts into local/dev mode. Anything else
+    (gunicorn, docker prod profile, a forgotten env in staging) must set
+    ``FLASK_SECRET_KEY`` to a real value.
+    """
+    from config import DEV_SECRET_FALLBACK
+
+    if app.config.get("TESTING") or app.debug:
+        return
+    if app.config.get("SECRET_KEY") == DEV_SECRET_FALLBACK:
+        raise RuntimeError(
+            "FLASK_SECRET_KEY is unset (or left at the dev fallback). Set a "
+            "cryptographically random value before booting in production."
+        )
 
 
 def _register_external_validators(app: Flask) -> None:
@@ -158,14 +168,41 @@ def _register_error_handlers(app: Flask) -> None:
 
 
 def _register_security_headers(app: Flask) -> None:
-    """Add defensive HTTP headers to every response."""
+    """Set conservative security response headers on every response.
+
+    CSP allows ``'self'`` plus inline styles (GOV.UK Frontend components
+    emit a small amount of inline CSS via ``style=`` on generated SVGs).
+    Scripts are ``'self'`` only; the bootstrap ``initAll()`` call lives in
+    ``static/app.js``. HSTS is only meaningful behind TLS but is cheap to
+    emit — browsers ignore it on plain HTTP.
+    """
 
     @app.after_request
-    def _set_headers(response):
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-XSS-Protection", "1; mode=block")
-        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    def _apply_headers(response):
+        headers = response.headers
+        headers.setdefault("X-Content-Type-Options", "nosniff")
+        headers.setdefault("X-Frame-Options", "DENY")
+        headers.setdefault("X-XSS-Protection", "1; mode=block")
+        headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        headers.setdefault(
+            "Permissions-Policy",
+            "geolocation=(), microphone=(), camera=()",
+        )
+        headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "img-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'",
+        )
+        if not app.debug and not app.config.get("TESTING"):
+            headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
         return response
 
 

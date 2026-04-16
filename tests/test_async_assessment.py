@@ -47,8 +47,20 @@ def grant(db):
         config_json={
             "slug": "async-test",
             "criteria": [
-                {"id": "skills", "label": "Skills", "weight": 50, "max": 3, "auto_reject_on_zero": True},
-                {"id": "proposal", "label": "Proposal", "weight": 50, "max": 3, "auto_reject_on_zero": True},
+                {
+                    "id": "skills",
+                    "label": "Skills",
+                    "weight": 50,
+                    "max": 3,
+                    "auto_reject_on_zero": True,
+                },
+                {
+                    "id": "proposal",
+                    "label": "Proposal",
+                    "weight": 50,
+                    "max": 3,
+                    "auto_reject_on_zero": True,
+                },
             ],
         },
     )
@@ -80,12 +92,14 @@ def submitted_application(db, grant, org):
 
 
 def _good_response(scores=None, recommendation="fund"):
-    payload = json.dumps({
-        "scores": scores or {"skills": 2, "proposal": 2},
-        "notes": {"skills": "Solid.", "proposal": "Clear."},
-        "gap_analysis": "Reasonable proposal.",
-        "recommendation": recommendation,
-    })
+    payload = json.dumps(
+        {
+            "scores": scores or {"skills": 2, "proposal": 2},
+            "notes": {"skills": "Solid.", "proposal": "Clear."},
+            "gap_analysis": "Reasonable proposal.",
+            "recommendation": recommendation,
+        }
+    )
     message = MagicMock()
     message.content = [MagicMock(text=payload)]
     return message
@@ -149,14 +163,14 @@ def test_queue_assessment_grant_without_criteria_returns_none(app, db, org):
 # ---------------------------------------------------------------------------
 
 
-def test_queue_assessment_transitions_pending_to_completed(
-    app, submitted_application
-):
+def test_queue_assessment_transitions_pending_to_completed(app, submitted_application):
     """With TASKS_SYNC, the worker runs inline — the returned row has already
     transitioned to COMPLETED by the time queue_assessment returns."""
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = _good_response()
@@ -168,6 +182,7 @@ def test_queue_assessment_transitions_pending_to_completed(
         # The row was created and then the sync worker filled it in.
         assert assessment is not None
         from app.extensions import db as _db
+
         _db.session.refresh(assessment)
         assert assessment.status == AssessmentStatus.COMPLETED
         assert assessment.started_at is not None
@@ -177,12 +192,12 @@ def test_queue_assessment_transitions_pending_to_completed(
         assert assessment.error_message is None
 
 
-def test_queue_assessment_is_idempotent_for_completed_rows(
-    app, submitted_application
-):
+def test_queue_assessment_is_idempotent_for_completed_rows(app, submitted_application):
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = _good_response()
@@ -203,27 +218,23 @@ def test_queue_assessment_is_idempotent_for_completed_rows(
 # ---------------------------------------------------------------------------
 
 
-def test_process_assessment_marks_row_failed_on_api_error(
-    app, submitted_application
-):
+def test_process_assessment_marks_row_failed_on_api_error(app, submitted_application):
     """Any exception raised inside the worker is caught and persisted on the
     row as status=FAILED with a truncated error_message."""
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
-            mock_client.messages.create.side_effect = RuntimeError(
-                "network is on fire"
-            )
+            mock_client.messages.create.side_effect = RuntimeError("network is on fire")
 
             from app.assessor_ai import queue_assessment
 
             queue_assessment(submitted_application.id)
 
-        assessment = Assessment.query.filter_by(
-            application_id=submitted_application.id
-        ).first()
+        assessment = Assessment.query.filter_by(application_id=submitted_application.id).first()
         assert assessment is not None
         assert assessment.status == AssessmentStatus.FAILED
         assert "network is on fire" in (assessment.error_message or "")
@@ -231,14 +242,14 @@ def test_process_assessment_marks_row_failed_on_api_error(
         assert assessment.completed_at is not None  # we stamp the failure time too
 
 
-def test_queue_assessment_retries_failed_row_in_place(
-    app, submitted_application
-):
+def test_queue_assessment_retries_failed_row_in_place(app, submitted_application):
     """Calling queue_assessment on a FAILED row resets it and requeues. The
     assessor's 'Retry AI' button relies on this path."""
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             # First call fails.
@@ -254,6 +265,7 @@ def test_queue_assessment_retries_failed_row_in_place(
             second = queue_assessment(submitted_application.id)
 
         from app.extensions import db as _db
+
         _db.session.refresh(second)
         assert first.id == second.id  # same row, not a new one
         assert second.status == AssessmentStatus.COMPLETED
@@ -281,8 +293,10 @@ def test_queue_assessment_skips_pending_row(app, submitted_application, db):
         db.session.add(existing)
         db.session.commit()
 
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
 
@@ -301,9 +315,7 @@ def test_queue_assessment_skips_pending_row(app, submitted_application, db):
 # ---------------------------------------------------------------------------
 
 
-def test_submit_enqueues_assessment_and_returns_fast(
-    client, applicant_user, seeded_grant, db
-):
+def test_submit_enqueues_assessment_and_returns_fast(client, applicant_user, seeded_grant, db):
     """End-to-end: hitting /apply/<id>/submit must call queue_assessment, not
     the old sync path, so the response returns as soon as the PENDING row is
     written."""
@@ -334,8 +346,10 @@ def test_submit_enqueues_assessment_and_returns_fast(
         sess["_user_id"] = str(applicant_user.id)
         sess["_fresh"] = True
 
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-         patch("app.assessor_ai.queue_assessment") as mock_queue:
+    with (
+        patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+        patch("app.assessor_ai.queue_assessment") as mock_queue,
+    ):
         response = client.post(f"/apply/{application.id}/submit")
 
     # The handler always delegates to queue_assessment — never to the old

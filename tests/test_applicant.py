@@ -123,9 +123,7 @@ def _login(client, user, password="correct-password-1234"):
 # ---------------------------------------------------------------------------
 
 
-def test_dashboard_shows_empty_state_for_new_applicant(
-    client, applicant, seeded_ehcf
-):
+def test_dashboard_shows_empty_state_for_new_applicant(client, applicant, seeded_ehcf):
     _login(client, applicant)
 
     response = client.get("/apply/")
@@ -138,9 +136,7 @@ def test_dashboard_shows_empty_state_for_new_applicant(
     assert "Ending Homelessness in Communities Fund" in body
 
 
-def test_dashboard_lists_existing_applications_with_status_tag(
-    client, applicant, seeded_ehcf, db
-):
+def test_dashboard_lists_existing_applications_with_status_tag(client, applicant, seeded_ehcf, db):
     grant, _form = seeded_ehcf
     application = Application(
         org_id=applicant.org_id,
@@ -160,9 +156,7 @@ def test_dashboard_lists_existing_applications_with_status_tag(
     assert "Continue" in body
 
 
-def test_dashboard_hides_grant_cta_when_already_applied(
-    client, applicant, seeded_ehcf, db
-):
+def test_dashboard_hides_grant_cta_when_already_applied(client, applicant, seeded_ehcf, db):
     grant, _form = seeded_ehcf
     db.session.add(
         Application(
@@ -198,9 +192,7 @@ def test_dashboard_redirects_anonymous_to_login(client):
 # ---------------------------------------------------------------------------
 
 
-def test_start_creates_draft_and_redirects_to_task_list(
-    client, applicant, seeded_ehcf, db
-):
+def test_start_creates_draft_and_redirects_to_task_list(client, applicant, seeded_ehcf, db):
     _login(client, applicant)
 
     response = client.get("/apply/ehcf/start", follow_redirects=False)
@@ -208,9 +200,11 @@ def test_start_creates_draft_and_redirects_to_task_list(
     location = response.headers["Location"]
     assert "/tasks" in location
 
-    apps = db.session.execute(
-        select(Application).where(Application.org_id == applicant.org_id)
-    ).scalars().all()
+    apps = (
+        db.session.execute(select(Application).where(Application.org_id == applicant.org_id))
+        .scalars()
+        .all()
+    )
     assert len(apps) == 1
     assert apps[0].status == ApplicationStatus.DRAFT
     assert apps[0].form_version == 1
@@ -224,9 +218,9 @@ def test_start_is_idempotent_across_visits(client, applicant, seeded_ehcf, db):
     client.get("/apply/ehcf/start")
 
     count = db.session.scalar(
-        select(_db.func.count()).select_from(Application).where(
-            Application.org_id == applicant.org_id
-        )
+        select(_db.func.count())
+        .select_from(Application)
+        .where(Application.org_id == applicant.org_id)
     )
     assert count == 1
 
@@ -248,9 +242,7 @@ def test_start_blocks_closed_grants(client, applicant, db, seeded_ehcf):
     assert "/apply/" in response.headers["Location"]
 
 
-def test_start_on_submitted_application_goes_to_review(
-    client, applicant, seeded_ehcf, db
-):
+def test_start_on_submitted_application_goes_to_review(client, applicant, seeded_ehcf, db):
     grant, _form = seeded_ehcf
     app = Application(
         org_id=applicant.org_id,
@@ -330,9 +322,7 @@ def test_form_page_404s_on_unknown_page_id(client, applicant, seeded_ehcf):
     assert response.status_code == 404
 
 
-def test_form_page_redirects_submitted_to_review(
-    client, applicant, seeded_ehcf, db
-):
+def test_form_page_redirects_submitted_to_review(client, applicant, seeded_ehcf, db):
     grant, _form = seeded_ehcf
     app = Application(
         org_id=applicant.org_id,
@@ -349,9 +339,7 @@ def test_form_page_redirects_submitted_to_review(
     assert f"/apply/{app.id}/review" in response.headers["Location"]
 
 
-def test_save_page_persists_draft_and_advances(
-    client, applicant, seeded_ehcf, db
-):
+def test_save_page_persists_draft_and_advances(client, applicant, seeded_ehcf, db):
     app = _start_application(client, applicant, seeded_ehcf)
 
     response = client.post(
@@ -376,9 +364,7 @@ def test_save_page_persists_draft_and_advances(
     assert app.status == ApplicationStatus.DRAFT
 
 
-def test_save_page_returns_400_with_errors_on_missing_required(
-    client, applicant, seeded_ehcf
-):
+def test_save_page_returns_400_with_errors_on_missing_required(client, applicant, seeded_ehcf):
     app = _start_application(client, applicant, seeded_ehcf)
 
     response = client.post(
@@ -407,9 +393,7 @@ def test_save_page_strips_whitespace(client, applicant, seeded_ehcf, db):
     assert app.answers_json["organisation"]["name"] == "Shelter Bristol"
 
 
-def test_save_page_second_page_preserves_first(
-    client, applicant, seeded_ehcf, db
-):
+def test_save_page_second_page_preserves_first(client, applicant, seeded_ehcf, db):
     app = _start_application(client, applicant, seeded_ehcf)
 
     client.post(
@@ -439,9 +423,7 @@ def test_save_page_second_page_preserves_first(
     assert app.answers_json["organisation"]["name"] == "Shelter Bristol"
 
 
-def test_save_page_on_submitted_application_is_blocked(
-    client, applicant, seeded_ehcf, db
-):
+def test_save_page_on_submitted_application_is_blocked(client, applicant, seeded_ehcf, db):
     grant, _form = seeded_ehcf
     app = Application(
         org_id=applicant.org_id,
@@ -480,9 +462,7 @@ def test_last_page_redirects_to_task_list(client, applicant, seeded_ehcf):
     assert "/tasks" in response.headers["Location"]
 
 
-def test_draft_persists_across_login_cycles(
-    client, applicant, seeded_ehcf, db
-):
+def test_draft_persists_across_login_cycles(client, applicant, seeded_ehcf, db):
     """Register -> save page -> sign out -> sign back in -> draft still there."""
     app = _start_application(client, applicant, seeded_ehcf)
     client.post(
@@ -609,9 +589,7 @@ def test_task_list_shows_submit_when_all_complete(client, applicant, seeded_ehcf
     assert "submit-application" in body
 
 
-def test_submit_transitions_complete_draft_to_submitted(
-    client, applicant, seeded_ehcf, db
-):
+def test_submit_transitions_complete_draft_to_submitted(client, applicant, seeded_ehcf, db):
     app = _start_application(client, applicant, seeded_ehcf)
     _fill_all_pages(client, app.id)
 
@@ -624,9 +602,7 @@ def test_submit_transitions_complete_draft_to_submitted(
     assert app.submitted_at is not None
 
 
-def test_submit_rejects_incomplete_application(
-    client, applicant, seeded_ehcf, db
-):
+def test_submit_rejects_incomplete_application(client, applicant, seeded_ehcf, db):
     app = _start_application(client, applicant, seeded_ehcf)
     # Only fill the first page.
     client.post(
@@ -650,9 +626,7 @@ def test_submit_rejects_incomplete_application(
     assert app.submitted_at is None
 
 
-def test_submit_on_already_submitted_is_a_noop(
-    client, applicant, seeded_ehcf, db
-):
+def test_submit_on_already_submitted_is_a_noop(client, applicant, seeded_ehcf, db):
     grant, _form = seeded_ehcf
     from datetime import UTC, datetime
 
@@ -694,9 +668,7 @@ def test_review_404s_for_other_orgs_application(
     assert response.status_code == 404
 
 
-def test_submitted_review_page_shows_confirmation_panel(
-    client, applicant, seeded_ehcf, db
-):
+def test_submitted_review_page_shows_confirmation_panel(client, applicant, seeded_ehcf, db):
     app = _start_application(client, applicant, seeded_ehcf)
     _fill_all_pages(client, app.id)
     client.post(f"/apply/{app.id}/submit")
@@ -740,9 +712,7 @@ _ELIGIBLE_ANSWERS = {
 }
 
 
-def test_eligibility_page_renders(
-    client, applicant, seeded_ehcf_with_eligibility
-):
+def test_eligibility_page_renders(client, applicant, seeded_ehcf_with_eligibility):
     _login(client, applicant)
     response = client.get("/apply/ehcf/eligibility")
     assert response.status_code == 200
@@ -750,9 +720,7 @@ def test_eligibility_page_renders(
     assert "Check your eligibility" in body
 
 
-def test_eligibility_pass_shows_success(
-    client, applicant, seeded_ehcf_with_eligibility
-):
+def test_eligibility_pass_shows_success(client, applicant, seeded_ehcf_with_eligibility):
     _login(client, applicant)
     response = client.post(
         "/apply/ehcf/eligibility",
@@ -763,9 +731,7 @@ def test_eligibility_pass_shows_success(
     assert "You appear to be eligible" in body
 
 
-def test_eligibility_fail_shows_failure(
-    client, applicant, seeded_ehcf_with_eligibility
-):
+def test_eligibility_fail_shows_failure(client, applicant, seeded_ehcf_with_eligibility):
     _login(client, applicant)
     # annual_income exceeds the £5M cap
     data = {**_ELIGIBLE_ANSWERS, "annual_income": "6000000"}
@@ -775,9 +741,7 @@ def test_eligibility_fail_shows_failure(
     assert "does not appear to be eligible" in body
 
 
-def test_eligibility_validation_errors(
-    client, applicant, seeded_ehcf_with_eligibility
-):
+def test_eligibility_validation_errors(client, applicant, seeded_ehcf_with_eligibility):
     _login(client, applicant)
     # POST an empty form — all required fields are missing.
     response = client.post("/apply/ehcf/eligibility", data={})

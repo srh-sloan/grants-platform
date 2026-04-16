@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
+{% from 'govuk_frontend_jinja/components/error-summary/macro.html' import govukErrorSummary %}
 
 {% block title %}Review generated grant configuration{% endblock %}
 
@@ -20,18 +21,14 @@
     </p>
 
     {% if errors %}
-    <div class="govuk-error-summary" data-module="govuk-error-summary">
-      <div role="alert">
-        <h2 class="govuk-error-summary__title">AI generation produced warnings</h2>
-        <div class="govuk-error-summary__body">
-          <ul class="govuk-list govuk-error-summary__list">
-            {% for err in errors %}
-            <li>{{ err }}</li>
-            {% endfor %}
-          </ul>
-        </div>
-      </div>
-    </div>
+      {% set _err_items = [] %}
+      {% for err in errors %}
+        {% set _ = _err_items.append({"text": err}) %}
+      {% endfor %}
+      {{ govukErrorSummary({
+        "titleText": "AI generation produced warnings",
+        "errorList": _err_items
+      }) }}
     {% endif %}
 
     <div class="govuk-inset-text">

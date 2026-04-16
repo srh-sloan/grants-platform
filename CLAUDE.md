@@ -667,13 +667,11 @@ split that stored value back into three items when pre-filling:
 
 ### Header sign-out requires a POST form (logout is POST-only)
 
-The `govukServiceNavigation` macro renders nav items as `<a>` tags (GET links).
-The `/auth/logout` route is POST-only for CSRF protection. The "Sign out" item
-in the header nav is therefore a broken GET link. The working sign-out is the
-`<form method="post">` button on the applicant dashboard.
-
-**Options if fixing:** (a) Accept GET on logout (simplest, low security risk),
-(b) Add a hidden form + JS click handler to intercept the nav link.
+The `govukServiceNavigation` macro renders nav items as `<a>` tags (GET
+links), but `/auth/logout` is POST-only for CSRF protection. Fixed by
+injecting a POST `<form>` into the macro's `navigationEnd` slot (see
+`partials/header.html` — the `_signout_slot` block). Any new surface that
+links to logout must use a POST form, not a plain anchor.
 
 ### `govuk-!-background-colour-red` is not a valid GOV.UK utility class
 
@@ -705,10 +703,10 @@ owns it). Name classes with `app-` prefix to avoid collisions with `govuk-` clas
 ### Build status (2026-04-16 end of day)
 
 **Phases 0-4 complete.** All PLAN.md build items either merged or in PR #60.
-235 tests passing, 8 pre-existing failures (`test_assessor_ai.py` — missing
-`anthropic` SDK). The data-driven architecture proved out: adding Common Ground
-Award (P4.1) and Local Digital partnership schema (P4.4) required zero Python
-code changes.
+304 tests passing, zero failures; `anthropic` SDK pinned in `pyproject.toml`
+so the AI-assessor tests run green. The data-driven architecture proved out:
+adding Common Ground Award (P4.1) and Local Digital partnership schema (P4.4)
+required zero Python code changes.
 
 ### Parallel orchestrator contention
 

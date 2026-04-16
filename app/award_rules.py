@@ -47,11 +47,11 @@ from dataclasses import dataclass
 class AwardRange:
     """The applicable award range for a scored application."""
 
-    award_type: str           # "revenue", "capital", or "both"
-    award_min: int            # minimum award amount in GBP
-    award_max: int            # maximum award amount in GBP
-    rule_id: str | None       # which rule matched, or None for flat fallback
-    rule_label: str | None    # human-readable label for the matched rule
+    award_type: str  # "revenue", "capital", or "both"
+    award_min: int  # minimum award amount in GBP
+    award_max: int  # maximum award amount in GBP
+    rule_id: str | None  # which rule matched, or None for flat fallback
+    rule_label: str | None  # human-readable label for the matched rule
 
 
 def _check_operator(score: int, operator: str, threshold: int) -> bool:
@@ -130,13 +130,10 @@ def check_scale_up_eligibility(
 
     criteria_ids: list[str] = clause.get("criteria", [])
     min_score: int = int(clause.get("min_score", 3))
-    failing = [
-        cid for cid in criteria_ids
-        if scores.get(cid, 0) < min_score
-    ]
+    failing = [cid for cid in criteria_ids if scores.get(cid, 0) < min_score]
 
     if not failing:
         scale_max = clause.get("scale_up_max", 0)
-        return True, "Eligible for scale-up award (max £{:,}).".format(scale_max)
+        return True, f"Eligible for scale-up award (max £{scale_max:,})."
 
     return False, "Does not meet scale-up threshold on: {}.".format(", ".join(failing))

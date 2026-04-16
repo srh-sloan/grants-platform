@@ -85,9 +85,22 @@ def test_merge_page_answers_preserves_other_pages():
 
 
 def test_supported_field_types_match_contract():
-    assert frozenset(
-        {"text", "textarea", "radio", "checkbox", "select", "number", "currency", "date", "file"}
-    ) == SUPPORTED_FIELD_TYPES
+    assert (
+        frozenset(
+            {
+                "text",
+                "textarea",
+                "radio",
+                "checkbox",
+                "select",
+                "number",
+                "currency",
+                "date",
+                "file",
+            }
+        )
+        == SUPPORTED_FIELD_TYPES
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -180,11 +193,7 @@ def test_word_limit_and_required_violation_on_different_fields():
 def test_ehcf_local_challenge_and_project_summary_have_word_limit():
     schema_path = pathlib.Path("app/forms/ehcf-application-v1.json")
     schema = json.loads(schema_path.read_text())
-    fields_by_id = {
-        field["id"]: field
-        for page in schema["pages"]
-        for field in page["fields"]
-    }
+    fields_by_id = {field["id"]: field for page in schema["pages"] for field in page["fields"]}
     assert fields_by_id["local_challenge"].get("word_limit") == 500
     assert fields_by_id["project_summary"].get("word_limit") == 500
 
@@ -296,9 +305,7 @@ def test_numeric_validation_skipped_for_hidden_field():
             },
         ]
     }
-    errors = validate_page(
-        page, {"funding_type": "revenue", "capital_amount": "garbage"}
-    )
+    errors = validate_page(page, {"funding_type": "revenue", "capital_amount": "garbage"})
     assert errors == {}
 
 
@@ -457,9 +464,7 @@ def test_ehcf_funding_page_has_conditional_capital_fields():
     schema_path = pathlib.Path("app/forms/ehcf-application-v1.json")
     schema = json.loads(schema_path.read_text())
     funding_page = next(p for p in schema["pages"] if p["id"] == "funding")
-    conditional_ids = [
-        f["id"] for f in funding_page["fields"] if f.get("visible_when")
-    ]
+    conditional_ids = [f["id"] for f in funding_page["fields"] if f.get("visible_when")]
     assert "planning_permission" in conditional_ids
     assert "contractor_identified" in conditional_ids
     assert "capital_readiness" in conditional_ids
@@ -488,9 +493,7 @@ def test_local_digital_partnership_page_has_conditional_fields():
     """Partnership detail fields are conditional on is_partnership == 'yes'."""
     schema = _load_local_digital_schema()
     partnership_page = next(p for p in schema["pages"] if p["id"] == "partnership")
-    conditional_ids = [
-        f["id"] for f in partnership_page["fields"] if f.get("visible_when")
-    ]
+    conditional_ids = [f["id"] for f in partnership_page["fields"] if f.get("visible_when")]
     assert "lead_org_role" in conditional_ids
     assert "partner1_name" in conditional_ids
     assert "partner1_role" in conditional_ids

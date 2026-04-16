@@ -34,6 +34,12 @@ from email.mime.text import MIMEText
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from flask_wtf import FlaskForm
+from govuk_frontend_wtf.wtforms_widgets import (
+    GovPasswordInput,
+    GovSelect,
+    GovSubmitInput,
+    GovTextInput,
+)
 from sqlalchemy import select
 from werkzeug.security import generate_password_hash
 from wtforms import PasswordField, SelectField, StringField, SubmitField
@@ -88,6 +94,7 @@ class CreateAssessorForm(FlaskForm):
 
     email = StringField(
         "Email address",
+        widget=GovTextInput(),
         validators=[
             InputRequired(message="Enter an email address"),
             Length(max=255),
@@ -96,6 +103,7 @@ class CreateAssessorForm(FlaskForm):
     )
     role = SelectField(
         "Role",
+        widget=GovSelect(),
         choices=[
             (UserRole.ASSESSOR.value, "Assessor"),
             (UserRole.ADMIN.value, "Admin"),
@@ -104,29 +112,33 @@ class CreateAssessorForm(FlaskForm):
     )
     password = PasswordField(
         "Password",
+        widget=GovPasswordInput(),
+        description="Must be at least 10 characters.",
         validators=[
             InputRequired(message="Enter a password"),
-            Length(min=_PASSWORD_MIN_LENGTH, max=128,
-                   message=f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"),
+            Length(
+                min=_PASSWORD_MIN_LENGTH,
+                max=128,
+                message=f"Password must be at least {_PASSWORD_MIN_LENGTH} characters",
+            ),
             Regexp(_PASSWORD_COMPLEXITY_REGEX, message=_PASSWORD_COMPLEXITY_MESSAGE),
         ],
     )
     confirm_password = PasswordField(
         "Confirm password",
+        widget=GovPasswordInput(),
         validators=[
             InputRequired(message="Confirm the password"),
             EqualTo("password", message="Passwords must match"),
         ],
     )
-    submit = SubmitField("Create account")
+    submit = SubmitField("Create account", widget=GovSubmitInput())
 
     def validate_email(self, field: StringField) -> None:
         email = (field.data or "").strip().lower()
         if not email:
             return
-        existing = db.session.execute(
-            select(User).where(User.email == email)
-        ).scalar_one_or_none()
+        existing = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
         if existing is not None:
             raise ValidationError("An account with this email already exists")
 
@@ -141,6 +153,7 @@ class EditUserForm(FlaskForm):
 
     email = StringField(
         "Email address",
+        widget=GovTextInput(),
         validators=[
             InputRequired(message="Enter an email address"),
             Length(max=255),
@@ -149,6 +162,7 @@ class EditUserForm(FlaskForm):
     )
     role = SelectField(
         "Role",
+        widget=GovSelect(),
         choices=[
             (UserRole.ASSESSOR.value, "Assessor"),
             (UserRole.ADMIN.value, "Admin"),
@@ -157,15 +171,18 @@ class EditUserForm(FlaskForm):
     )
     new_password = PasswordField(
         "New password",
+        widget=GovPasswordInput(),
+        description="Leave blank to keep the existing password.",
         validators=[],
     )
     confirm_new_password = PasswordField(
         "Confirm new password",
+        widget=GovPasswordInput(),
         validators=[
             EqualTo("new_password", message="Passwords must match"),
         ],
     )
-    submit = SubmitField("Save changes")
+    submit = SubmitField("Save changes", widget=GovSubmitInput())
 
     def __init__(self, *args, user_id: int | None = None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -189,9 +206,7 @@ class EditUserForm(FlaskForm):
         if not value:
             return
         if len(value) < _PASSWORD_MIN_LENGTH:
-            raise ValidationError(
-                f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"
-            )
+            raise ValidationError(f"Password must be at least {_PASSWORD_MIN_LENGTH} characters")
         if len(value) > 128:
             raise ValidationError("Password must be 128 characters or fewer")
         if not re.search(_PASSWORD_COMPLEXITY_REGEX, value):
@@ -281,7 +296,8 @@ def _notify_applicant(
         AssessmentRecommendation.REFER: "REFERRED FOR FURTHER REVIEW",
     }.get(recommendation, recommendation.value.upper())
 
-    body = textwrap.dedent("""
+    body = (
+        textwrap.dedent("""
         Dear {org_name},
 
         Thank you for your application to the {grant_name}.
@@ -297,17 +313,21 @@ def _notify_applicant(
 
         Yours sincerely,
         The {grant_name} Assessment Team
-    """).strip().format(
-        org_name=org.name,
-        grant_name=application.grant.name,
-        rec_label=rec_label,
-        notes_section=(
-            "Additional information from the assessment panel:\n\n    " + decision_notes
-            if decision_notes else ""
-        ),
-        contact_email=application.grant.config_json.get(
-            "contact_email", "grants@communities.gov.uk"
-        ),
+    """)
+        .strip()
+        .format(
+            org_name=org.name,
+            grant_name=application.grant.name,
+            rec_label=rec_label,
+            notes_section=(
+                "Additional information from the assessment panel:\n\n    " + decision_notes
+                if decision_notes
+                else ""
+            ),
+            contact_email=application.grant.config_json.get(
+                "contact_email", "grants@communities.gov.uk"
+            ),
+        )
     )
 
     msg = MIMEText(body, "plain", "utf-8")
@@ -328,7 +348,9 @@ def _notify_applicant(
         server.sendmail(smtp_from, [recipient], msg.as_string())
         server.quit()
         log.info("Outcome notification sent to %s", recipient)
-    except Exception as exc:
+    except (smtplib.SMTPException, OSError) as exc:
+        # Mail is best-effort from the user's point of view — the outcome
+        # is already recorded in the DB. Log and continue.
         log.warning("Failed to send outcome notification: %s", exc)
 
 
@@ -355,7 +377,8 @@ def queue():
         rows = [(a, s) for a, s in rows if a.status.value == status_filter]
     if rec_filter:
         rows = [
-            (a, s) for a, s in rows
+            (a, s)
+            for a, s in rows
             if s and s.recommendation and s.recommendation.value == rec_filter
         ]
 
@@ -474,8 +497,7 @@ def save_score(app_id: int):
     assessment.scores_json = {**scores, **preserved_scores}
     # Preserve internal metadata — only carry forward non-empty values
     preserved_notes: dict = {}
-    for key in ("_eligibility_notes", "_declaration_notes", "_gap_analysis",
-                "_decision_notes"):
+    for key in ("_eligibility_notes", "_declaration_notes", "_gap_analysis", "_decision_notes"):
         val = old_notes.get(key)
         if val:
             preserved_notes[key] = val
@@ -692,6 +714,7 @@ def _call_claude_for_monitoring(prompt: str) -> dict | None:
     if not api_key:
         try:
             from dotenv import load_dotenv
+
             load_dotenv()
             api_key = os.environ.get("ANTHROPIC_API_KEY")
         except ImportError:
@@ -725,10 +748,12 @@ def _build_monitoring_prompt(application: Application) -> str:
     org_name = org.name if org else "Unknown"
 
     answers = application.answers_json or {}
-    answers_block = "\n".join(
-        f"  {key}: {json.dumps(value, ensure_ascii=False)}"
-        for key, value in answers.items()
-    ) or "  (no answers provided)"
+    answers_block = (
+        "\n".join(
+            f"  {key}: {json.dumps(value, ensure_ascii=False)}" for key, value in answers.items()
+        )
+        or "  (no answers provided)"
+    )
 
     # Build scores block from the assessment
     assessment = Assessment.query.filter_by(application_id=application.id).first()
@@ -743,15 +768,11 @@ def _build_monitoring_prompt(application: Application) -> str:
     funding_parts = []
     if award_ranges.get("revenue_min") and award_ranges.get("revenue_max"):
         funding_parts.append(
-            "Revenue: {}-{}/year".format(
-                award_ranges["revenue_min"], award_ranges["revenue_max"]
-            )
+            "Revenue: {}-{}/year".format(award_ranges["revenue_min"], award_ranges["revenue_max"])
         )
     if award_ranges.get("capital_min") and award_ranges.get("capital_max"):
         funding_parts.append(
-            "Capital: {}-{}".format(
-                award_ranges["capital_min"], award_ranges["capital_max"]
-            )
+            "Capital: {}-{}".format(award_ranges["capital_min"], award_ranges["capital_max"])
         )
     funding_info = "; ".join(funding_parts) or "Not specified"
 
@@ -766,9 +787,9 @@ def _build_monitoring_prompt(application: Application) -> str:
 
     # JSON example kept as a plain string to avoid f-string brace escaping
     json_example = (
-        '{\n'
+        "{\n"
         '  "kpis": [\n'
-        '    {\n'
+        "    {\n"
         '      "name": "KPI name",\n'
         '      "definition": "What this measures",\n'
         '      "target": "Target value or description",\n'
@@ -776,18 +797,18 @@ def _build_monitoring_prompt(application: Application) -> str:
         '      "evidence_source": "How it will be measured",\n'
         '      "reporting_frequency": "quarterly|annually|six-monthly",\n'
         '      "owner": "Who reports on this"\n'
-        '    }\n'
-        '  ],\n'
+        "    }\n"
+        "  ],\n"
         '  "milestones": [\n'
-        '    {\n'
+        "    {\n"
         '      "period": "Month 1-3",\n'
         '      "description": "What should be achieved",\n'
         '      "evidence_required": "What evidence to collect"\n'
-        '    }\n'
-        '  ],\n'
+        "    }\n"
+        "  ],\n"
         '  "risk_review_points": ["Month 6", "Month 12", "Month 24"],\n'
         '  "summary": "Brief monitoring plan narrative"\n'
-        '}'
+        "}"
     )
 
     return (
@@ -948,11 +969,15 @@ def allocation():
 @admin_required
 def list_users():
     _admin_required()
-    users = db.session.execute(
-        select(User).where(
-            User.role.in_([UserRole.ASSESSOR, UserRole.ADMIN])
-        ).order_by(User.role, User.email)
-    ).scalars().all()
+    users = (
+        db.session.execute(
+            select(User)
+            .where(User.role.in_([UserRole.ASSESSOR, UserRole.ADMIN]))
+            .order_by(User.role, User.email)
+        )
+        .scalars()
+        .all()
+    )
     form = _CsrfForm()
     return render_template("assessor/users.html", users=users, form=form)
 
@@ -971,7 +996,12 @@ def create_user():
         )
         db.session.add(user)
         db.session.commit()
-        audit_log("USER_CREATED", user_id=current_user.id, target_email=email, target_role=UserRole(form.role.data).value)
+        audit_log(
+            "USER_CREATED",
+            user_id=current_user.id,
+            target_email=email,
+            target_role=UserRole(form.role.data).value,
+        )
         flash(f"Account created for {email}.", "success")
         return redirect(url_for("assessor.list_users"))
     return render_template("assessor/create_user.html", form=form)
@@ -1013,7 +1043,14 @@ def edit_user(user_id: int):
         if form.new_password.data:
             user.password_hash = generate_password_hash(form.new_password.data)
         db.session.commit()
-        audit_log("USER_UPDATED", user_id=current_user.id, target_id=user.id, target_email=new_email, target_role=new_role.value, password_changed=bool(form.new_password.data))
+        audit_log(
+            "USER_UPDATED",
+            user_id=current_user.id,
+            target_id=user.id,
+            target_email=new_email,
+            target_role=new_role.value,
+            password_changed=bool(form.new_password.data),
+        )
         flash(f"Account updated for {new_email}.", "success")
         return redirect(url_for("assessor.list_users"))
 

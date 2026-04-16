@@ -16,7 +16,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-dev-secret-change-me}
+      # Prod-ish compose run: fail fast if the deploying host hasn't set a
+      # real secret. Dev loop should use `docker compose --profile dev up`.
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set (use a cryptographically random value)}
       DATABASE_URL: sqlite:////data/grants.db
       UPLOAD_FOLDER: /data/uploads
     volumes:
@@ -41,7 +43,9 @@ services:
     ports:
       - "5000:5000"
     environment:
-      FLASK_SECRET_KEY: dev-secret-change-me
+      # Dev-only convenience secret. Do NOT copy this pattern into the `web`
+      # service; the prod-ish entry requires a real env var via ${...:?...}.
+      FLASK_SECRET_KEY: dev-secret-do-not-use-in-prod
       FLASK_DEBUG: "1"
       DATABASE_URL: sqlite:////data/grants.db
       UPLOAD_FOLDER: /data/uploads

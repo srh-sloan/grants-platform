@@ -14,8 +14,20 @@ CRITERIA = [
     {"id": "skills", "label": "Skills", "weight": 10, "max": 3, "auto_reject_on_zero": True},
     {"id": "proposal1", "label": "Proposal 1", "weight": 10, "max": 3, "auto_reject_on_zero": True},
     {"id": "proposal2", "label": "Proposal 2", "weight": 30, "max": 3, "auto_reject_on_zero": True},
-    {"id": "deliverability1", "label": "Deliv 1", "weight": 25, "max": 3, "auto_reject_on_zero": True},
-    {"id": "deliverability2", "label": "Deliv 2", "weight": 5, "max": 3, "auto_reject_on_zero": True},
+    {
+        "id": "deliverability1",
+        "label": "Deliv 1",
+        "weight": 25,
+        "max": 3,
+        "auto_reject_on_zero": True,
+    },
+    {
+        "id": "deliverability2",
+        "label": "Deliv 2",
+        "weight": 5,
+        "max": 3,
+        "auto_reject_on_zero": True,
+    },
     {"id": "cost_value", "label": "Cost", "weight": 10, "max": 3, "auto_reject_on_zero": True},
     {"id": "outcomes", "label": "Outcomes", "weight": 10, "max": 3, "auto_reject_on_zero": True},
 ]
@@ -28,8 +40,13 @@ def test_calculate_weighted_score_all_threes_is_max():
 
 def test_calculate_weighted_score_mixed():
     scores = {
-        "skills": 2, "proposal1": 2, "proposal2": 3, "deliverability1": 2,
-        "deliverability2": 1, "cost_value": 2, "outcomes": 2,
+        "skills": 2,
+        "proposal1": 2,
+        "proposal2": 3,
+        "deliverability1": 2,
+        "deliverability2": 1,
+        "cost_value": 2,
+        "outcomes": 2,
     }
     # 2*10 + 2*10 + 3*30 + 2*25 + 1*5 + 2*10 + 2*10 = 225
     assert calculate_weighted_score(scores, CRITERIA) == 225
@@ -60,7 +77,11 @@ def test_has_auto_reject_ignores_criteria_not_flagged():
 def test_missing_criteria_lists_unscored():
     scores = {"skills": 2, "proposal1": 3}
     assert set(missing_criteria(scores, CRITERIA)) == {
-        "proposal2", "deliverability1", "deliverability2", "cost_value", "outcomes",
+        "proposal2",
+        "deliverability1",
+        "deliverability2",
+        "cost_value",
+        "outcomes",
     }
 
 

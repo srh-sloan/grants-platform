@@ -199,11 +199,7 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
             continue
 
         # 2. Word-limit check — textarea only, only when a non-empty value exists.
-        if (
-            field_type == "textarea"
-            and "word_limit" in field
-            and _has_value(value)
-        ):
+        if field_type == "textarea" and "word_limit" in field and _has_value(value):
             word_limit: int = field["word_limit"]
             actual_count = len(str(value).split())
             if actual_count > word_limit:
@@ -213,13 +209,14 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
                 )
 
         # 3. Numeric-format check — number / currency only, when a value exists.
-        if field_type in ("number", "currency") and _has_value(value):
-            if not _is_numeric(value, currency=field_type == "currency"):
-                errors[field_id] = (
-                    "Enter an amount, like 50000"
-                    if field_type == "currency"
-                    else "Enter a number"
-                )
+        if (
+            field_type in ("number", "currency")
+            and _has_value(value)
+            and not _is_numeric(value, currency=field_type == "currency")
+        ):
+            errors[field_id] = (
+                "Enter an amount, like 50000" if field_type == "currency" else "Enter a number"
+            )
 
     return errors
 

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from app.award_rules import AwardRange, check_scale_up_eligibility, derive_award_range
+from app.award_rules import check_scale_up_eligibility, derive_award_range
 
 GRANT_CONFIG_WITH_RULES = {
     "award_rules": [

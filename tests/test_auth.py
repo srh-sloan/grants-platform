@@ -119,9 +119,7 @@ def test_register_normalises_email_to_lowercase(client, db):
             "confirm_password": "V4lid!Password1",
         },
     )
-    user = db.session.execute(
-        select(User).where(User.email == "mixed@example.test")
-    ).scalar_one()
+    user = db.session.execute(select(User).where(User.email == "mixed@example.test")).scalar_one()
     assert user.email == "mixed@example.test"
 
 
@@ -198,9 +196,7 @@ def test_register_strips_whitespace_from_organisation_name(client, db):
         follow_redirects=False,
     )
     assert response.status_code == 302
-    user = db.session.execute(
-        select(User).where(User.email == "trim@example.test")
-    ).scalar_one()
+    user = db.session.execute(select(User).where(User.email == "trim@example.test")).scalar_one()
     assert user.organisation.name == "Shelter Bristol"
 
 
@@ -221,9 +217,7 @@ def test_organisation_model_strips_name_and_contact_name(db):
 
 def test_dashboard_trims_organisation_name_on_render(client, db, make_user):
     """Legacy/padded org names are rendered clean on the applicant dashboard."""
-    user, password = make_user(
-        email="dash@example.test", organisation_name="Padded Org"
-    )
+    user, password = make_user(email="dash@example.test", organisation_name="Padded Org")
     # Bypass the validator by patching directly in the DB to simulate legacy
     # data that predates the strip-on-entry fix.
     db.session.execute(
@@ -404,9 +398,7 @@ def test_signin_banner_does_not_leak_into_later_pages(client, make_user):
     "You are signed in." flash could sit in the session and render alongside
     "You have been signed out." on the landing page after logout.
     """
-    _u, password = make_user(
-        email="assessor@x.test", role=UserRole.ASSESSOR, with_org=False
-    )
+    _u, password = make_user(email="assessor@x.test", role=UserRole.ASSESSOR, with_org=False)
 
     # Sign in — assessor lands on /assess/ which is not a Stream A template.
     after_login = client.post(
@@ -451,9 +443,7 @@ def test_applicant_cannot_visit_assessor_area(client, make_user):
 
 
 def test_assessor_cannot_visit_applicant_area(client, make_user):
-    _u, password = make_user(
-        email="b@x.test", role=UserRole.ASSESSOR, with_org=False
-    )
+    _u, password = make_user(email="b@x.test", role=UserRole.ASSESSOR, with_org=False)
     client.post("/auth/login", data={"email": "b@x.test", "password": password})
 
     response = client.get("/apply/")
