@@ -70,7 +70,7 @@
                   }) }}
                 </td>
                 <td class="govuk-table__cell">
-                  {{ app.updated_at.strftime('%-d %B %Y') }}
+                  {{ app.updated_at.strftime('%d %B %Y') }}
                 </td>
                 <td class="govuk-table__cell">
                   {% if app.status.value == "draft" %}

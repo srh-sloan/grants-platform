@@ -47,6 +47,7 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     with app.app_context():
         from app import models  # noqa: F401  (registers tables)
         from app.auth import load_user  # noqa: F401  (registers @user_loader)
+        _auto_seed()
 
     _register_blueprints(app)
     _register_error_handlers(app)
@@ -54,6 +55,26 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     return app
+
+
+def _auto_seed() -> None:
+    """Seed grants and demo users on first run if the DB is empty.
+
+    Idempotent -- safe to call on every startup. Skipped in testing
+    (TestConfig sets TESTING=True).
+    """
+    from flask import current_app
+    if current_app.config.get("TESTING"):
+        return
+    from app.models import Grant
+    if db.session.execute(db.select(Grant)).first() is not None:
+        return  # already seeded
+    try:
+        from seed import seed_into_session
+        seed_into_session()
+    except Exception as exc:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("Auto-seed failed: %s", exc)
 
 
 def _install_jinja_loaders(app: Flask) -> None:
