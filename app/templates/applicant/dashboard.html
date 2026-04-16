@@ -103,7 +103,7 @@
               {% if grant.summary %}
                 <p class="govuk-body">{{ grant.summary }}</p>
               {% endif %}
-              <form method="get" action="{{ url_for('applicant.start', grant_slug=grant.slug) }}" class="govuk-!-margin-top-2">
+              <form method="get" action="{{ url_for('applicant.eligibility', grant_slug=grant.slug) }}" class="govuk-!-margin-top-2">
                 {# GET — safe to revisit / bookmark. No CSRF token needed. #}
                 {{ govukButton({
                   "text": "Start application",
