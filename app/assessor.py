@@ -143,6 +143,28 @@ def _get_application_or_404(app_id: int) -> Application:
     return application
 
 
+_VALID_RETURN_TO = {"queue", "allocation"}
+
+
+def _detail_return_to() -> str:
+    """Safelisted ``return_to`` context for the application-detail back link.
+
+    Read from the query string on GET and from the submitted form on POST so
+    the context survives POST/redirect/GET cycles (save score, flag, etc.).
+    """
+    raw = request.args.get("return_to") or request.form.get("return_to") or ""
+    return raw if raw in _VALID_RETURN_TO else ""
+
+
+def _redirect_to_detail(app_id: int):
+    """Redirect to the detail view preserving the ``return_to`` context."""
+    kwargs: dict[str, object] = {"app_id": app_id}
+    back = _detail_return_to()
+    if back:
+        kwargs["return_to"] = back
+    return redirect(url_for("assessor.application_detail", **kwargs))
+
+
 def _get_or_create_assessment(application: Application) -> Assessment:
     assessment = Assessment.query.filter_by(application_id=application.id).first()
     if assessment is None:
@@ -318,6 +340,7 @@ def application_detail(app_id: int):
         scoring_complete=scoring_complete,
         can_decide=can_decide,
         decide_reason=decide_reason,
+        return_to=_detail_return_to(),
     )
 
 
@@ -360,7 +383,7 @@ def save_score(app_id: int):
     if errors:
         for msg in errors:
             flash(msg, "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     assessment = _get_or_create_assessment(application)
     auto_rejected = has_auto_reject(scores, criteria)
@@ -388,7 +411,7 @@ def save_score(app_id: int):
 
     db.session.commit()
     flash("Scores saved.", "success")
-    return redirect(url_for("assessor.application_detail", app_id=app_id))
+    return _redirect_to_detail(app_id)
 
 
 @bp.post("/<int:app_id>/eligibility-gate")
@@ -405,11 +428,11 @@ def eligibility_gate(app_id: int):
 
     if raw_passed not in ("true", "false"):
         flash("Select Pass or Fail for the eligibility check.", "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     if not elig_notes:
         flash("Eligibility notes are required.", "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     passed = raw_passed == "true"
 
@@ -429,7 +452,7 @@ def eligibility_gate(app_id: int):
             "Eligibility check failed. You may record a reject decision.",
             "warning",
         )
-    return redirect(url_for("assessor.application_detail", app_id=app_id))
+    return _redirect_to_detail(app_id)
 
 
 @bp.post("/<int:app_id>/declaration-gate")
@@ -446,11 +469,11 @@ def declaration_gate(app_id: int):
 
     if raw_passed not in ("true", "false"):
         flash("Select Pass or Fail for the declaration.", "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     if not decl_notes:
         flash("Declaration notes are required.", "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     passed = raw_passed == "true"
 
@@ -463,7 +486,7 @@ def declaration_gate(app_id: int):
 
     db.session.commit()
     flash("Declaration recorded.", "success")
-    return redirect(url_for("assessor.application_detail", app_id=app_id))
+    return _redirect_to_detail(app_id)
 
 
 @bp.post("/<int:app_id>/flag")
@@ -487,7 +510,7 @@ def flag_for_moderation(app_id: int):
         flash("Moderation flag removed.", "success")
 
     db.session.commit()
-    return redirect(url_for("assessor.application_detail", app_id=app_id))
+    return _redirect_to_detail(app_id)
 
 
 @bp.post("/<int:app_id>/decision")
@@ -505,7 +528,7 @@ def record_decision(app_id: int):
     allowed, reason = decision_allowed(scores, criteria)
     if not allowed:
         flash(reason, "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     rec_value = request.form.get("recommendation", "").strip()
     decision_notes = request.form.get("decision_notes", "").strip()
@@ -514,17 +537,17 @@ def record_decision(app_id: int):
         recommendation = AssessmentRecommendation(rec_value)
     except ValueError:
         flash("Invalid recommendation value.", "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     # If eligibility failed, only reject is valid
     elig = eligibility_gate_status(scores)
     if elig is False and recommendation != AssessmentRecommendation.REJECT:
         flash("Eligibility failed — only a reject decision is allowed.", "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     if not decision_notes:
         flash("Decision notes are required.", "error")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     application.status = {
         AssessmentRecommendation.FUND: ApplicationStatus.APPROVED,
@@ -542,7 +565,7 @@ def record_decision(app_id: int):
     _notify_applicant(application, recommendation, decision_notes)
 
     flash("Decision recorded and applicant notified.", "success")
-    return redirect(url_for("assessor.application_detail", app_id=app_id))
+    return _redirect_to_detail(app_id)
 
 
 # ---------------------------------------------------------------------------
@@ -561,7 +584,7 @@ def trigger_ai(app_id: int):
     existing = Assessment.query.filter_by(application_id=app_id).first()
     if existing is not None:
         flash("AI assessment already exists for this application.", "warning")
-        return redirect(url_for("assessor.application_detail", app_id=app_id))
+        return _redirect_to_detail(app_id)
 
     from app.assessor_ai import assess_application
     assessment = assess_application(app_id)
@@ -569,7 +592,7 @@ def trigger_ai(app_id: int):
         flash("AI assessment failed -- check ANTHROPIC_API_KEY is set and the application has answers.", "error")
     else:
         flash("AI assessment complete.", "success")
-    return redirect(url_for("assessor.application_detail", app_id=app_id))
+    return _redirect_to_detail(app_id)
 
 
 # ---------------------------------------------------------------------------

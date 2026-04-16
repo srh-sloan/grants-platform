@@ -390,3 +390,73 @@ def test_decision_blocked_without_declaration(client, assessor, submitted_app, a
     assert b"declaration" in resp.data.lower()
     _db.session.refresh(submitted_app)
     assert submitted_app.status == ApplicationStatus.SUBMITTED
+
+
+# ---------------------------------------------------------------------------
+# Tests: application detail back-link context
+# ---------------------------------------------------------------------------
+
+
+def test_detail_back_link_defaults_to_queue(client, assessor, submitted_app, assessment):
+    """With no return_to, the detail page back-link points at the queue."""
+    _login(client)
+    resp = client.get(f"/assess/{submitted_app.id}")
+    assert resp.status_code == 200
+    assert b"Back to queue" in resp.data
+    assert b"Back to allocation dashboard" not in resp.data
+
+
+def test_detail_back_link_follows_return_to_allocation(
+    client, assessor, submitted_app, assessment
+):
+    """return_to=allocation switches the back-link to the allocation dashboard."""
+    _login(client)
+    resp = client.get(f"/assess/{submitted_app.id}?return_to=allocation")
+    assert resp.status_code == 200
+    assert b"Back to allocation dashboard" in resp.data
+    assert b"Back to queue" not in resp.data
+
+
+def test_detail_back_link_ignores_unknown_return_to(
+    client, assessor, submitted_app, assessment
+):
+    """An unrecognised return_to value falls back to the queue link."""
+    _login(client)
+    resp = client.get(f"/assess/{submitted_app.id}?return_to=../evil")
+    assert resp.status_code == 200
+    assert b"Back to queue" in resp.data
+    assert b"Back to allocation dashboard" not in resp.data
+
+
+def test_detail_return_to_preserved_across_post_redirect(
+    client, assessor, submitted_app, assessment
+):
+    """POST handlers preserve return_to when redirecting back to the detail view."""
+    _login(client)
+    # Post the eligibility gate with a hidden return_to=allocation, mimicking
+    # the form the template renders when the user arrived from allocation.
+    resp = client.post(
+        f"/assess/{submitted_app.id}/eligibility-gate",
+        data={
+            "eligibility_passed": "true",
+            "eligibility_notes": "All checks OK.",
+            "return_to": "allocation",
+        },
+    )
+    # 302 redirect preserves the query string.
+    assert resp.status_code == 302
+    assert "return_to=allocation" in resp.headers["Location"]
+
+
+def test_allocation_review_link_threads_return_to(
+    client, assessor, submitted_app, assessment
+):
+    """The allocation dashboard Review link carries return_to=allocation."""
+    _login(client)
+    # Give the assessment a weighted_total so the allocation query returns it.
+    assessment.weighted_total = 100
+    _db.session.commit()
+
+    resp = client.get("/assess/allocation")
+    assert resp.status_code == 200
+    assert f"/assess/{submitted_app.id}?return_to=allocation".encode() in resp.data

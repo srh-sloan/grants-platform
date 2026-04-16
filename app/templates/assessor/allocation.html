@@ -14,9 +14,7 @@
 <div class="govuk-grid-row">
   <div class="govuk-grid-column-full">
 
-    <a class="govuk-back-link" href="{{ url_for('assessor.queue') }}">Back to queue</a>
-
-    <h1 class="govuk-heading-xl govuk-!-margin-top-4">Allocation dashboard</h1>
+    <h1 class="govuk-heading-xl">Allocation dashboard</h1>
 
     <p class="govuk-body">
       Total fund budget: <strong>
@@ -99,7 +97,7 @@
                 {% endif %}
               </td>
               <td class="govuk-table__cell">
-                <a class="govuk-link" href="{{ url_for('assessor.application_detail', app_id=application.id) }}">
+                <a class="govuk-link" href="{{ url_for('assessor.application_detail', app_id=application.id, return_to='allocation') }}">
                   Review<span class="govuk-visually-hidden"> application {{ application.id }}</span>
                 </a>
               </td>
