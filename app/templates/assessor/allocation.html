@@ -60,7 +60,7 @@
 
             {% set over_budget = ns.cumulative > total_budget %}
 
-            <tr class="govuk-table__row {% if over_budget %}govuk-!-background-colour-red{% endif %}">
+            <tr class="govuk-table__row" {% if over_budget %}style="background-color: #f3d3c9;"{% endif %}>
               <td class="govuk-table__cell">{{ ns.rank }}</td>
               <td class="govuk-table__cell">
                 {{ (application.organisation.name | trim) if application.organisation else "—" }}
