@@ -200,6 +200,7 @@
               "name": field.id,
               "label": {"text": field.label, "classes": "govuk-label--m"},
               "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "type": "number",
               "inputmode": "numeric",
               "value": field_value,
               "errorMessage": error_obj
@@ -212,6 +213,7 @@
               "name": field.id,
               "label": {"text": field.label, "classes": "govuk-label--m"},
               "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "type": "number",
               "inputmode": "numeric",
               "prefix": {"text": "£"},
               "value": field_value,

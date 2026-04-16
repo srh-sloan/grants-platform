@@ -171,6 +171,12 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
        the answer must not exceed that many whitespace-separated tokens.
        Word-limit is only checked when the field has a non-empty value so it
        never double-reports alongside the required error.
+    3. **Numeric format** — if ``type`` is ``number`` or ``currency`` and the
+       field has a non-empty value, the value must parse as a number.  A
+       leading ``£`` and thousands-separator commas are tolerated for currency
+       (so ``"£50,000"`` and ``"50000"`` both pass).  Numeric-format is only
+       checked when the field has a non-empty value so it never double-reports
+       alongside the required error.
     """
     errors: dict[str, str] = {}
     for field in page.get("fields") or []:
@@ -185,15 +191,16 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
 
         field_id: str = field["id"]
         value = submitted.get(field_id)
+        field_type = field.get("type")
 
-        # 1. Required check — runs first; if it fires we skip word-limit.
+        # 1. Required check — runs first; if it fires we skip later checks.
         if field.get("required") and not _has_value(value):
             errors[field_id] = "This field is required"
             continue
 
         # 2. Word-limit check — textarea only, only when a non-empty value exists.
         if (
-            field.get("type") == "textarea"
+            field_type == "textarea"
             and "word_limit" in field
             and _has_value(value)
         ):
@@ -205,7 +212,38 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
                     f" (your answer is {actual_count} words)"
                 )
 
+        # 3. Numeric-format check — number / currency only, when a value exists.
+        if field_type in ("number", "currency") and _has_value(value):
+            if not _is_numeric(value, currency=field_type == "currency"):
+                errors[field_id] = (
+                    "Enter an amount, like 50000"
+                    if field_type == "currency"
+                    else "Enter a number"
+                )
+
     return errors
+
+
+def _is_numeric(value: object, *, currency: bool = False) -> bool:
+    """Return True if *value* parses as a number.
+
+    When *currency* is True, a leading ``£`` and thousands-separator commas
+    are stripped before parsing, so ``"£50,000"`` is accepted.
+    """
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return True
+    if not isinstance(value, str):
+        return False
+    candidate = value.strip()
+    if currency:
+        candidate = candidate.lstrip("£").replace(",", "").strip()
+    if candidate == "":
+        return False
+    try:
+        float(candidate)
+    except ValueError:
+        return False
+    return True
 
 
 def _has_value(value: object) -> bool:
