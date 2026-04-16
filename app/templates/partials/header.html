@@ -4,9 +4,10 @@
 
 {{ govukSkipLink({"text": "Skip to main content", "href": "#main-content"}) }}
 
+{# The GOV.UK logo (Tudor Crown + wordmark) is rendered by govukHeader and
+   shipped in govuk-frontend 5.4+ — no opt-in flag is needed on 5.9. #}
 {{ govukHeader({
-  "homepageUrl": url_for('public.index'),
-  "useTudorCrown": true
+  "homepageUrl": url_for('public.index')
 }) }}
 
 {{ govukServiceNavigation({
