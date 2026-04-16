@@ -1,0 +1,15 @@
+{% from 'govuk_frontend_jinja/components/skip-link/macro.html' import govukSkipLink %}
+{% from 'govuk_frontend_jinja/components/header/macro.html' import govukHeader %}
+{% from 'govuk_frontend_jinja/components/service-navigation/macro.html' import govukServiceNavigation %}
+
+{{ govukSkipLink({"text": "Skip to main content", "href": "#main-content"}) }}
+
+{{ govukHeader({
+  "homepageUrl": url_for('public.index'),
+  "useTudorCrown": true
+}) }}
+
+{{ govukServiceNavigation({
+  "serviceName": "Grants platform",
+  "serviceUrl": url_for('public.index')
+}) }}

@@ -1,0 +1,177 @@
+{
+  "id": "ehcf-application",
+  "version": 1,
+  "kind": "application",
+  "pages": [
+    {
+      "id": "organisation",
+      "title": "About your organisation",
+      "fields": [
+        {"id": "name", "type": "text", "label": "Organisation name", "required": true},
+        {
+          "id": "org_type",
+          "type": "radio",
+          "label": "Organisation type",
+          "required": true,
+          "options": [
+            {"value": "charity", "label": "Registered charity"},
+            {"value": "CIO", "label": "Charitable Incorporated Organisation (CIO)"},
+            {"value": "CIC", "label": "Community Interest Company (CIC, non profit-distributing)"},
+            {"value": "CBS", "label": "Community Benefit Society"},
+            {"value": "PCC", "label": "Parochial Church Council"}
+          ]
+        },
+        {
+          "id": "registration_number",
+          "type": "text",
+          "label": "Charity or company registration number",
+          "required": true
+        },
+        {
+          "id": "annual_income",
+          "type": "currency",
+          "label": "Annual income (most recent financial year, £)",
+          "required": true
+        },
+        {
+          "id": "years_serving_homeless",
+          "type": "number",
+          "label": "Years delivering services to people rough sleeping or at risk of rough sleeping",
+          "required": true
+        },
+        {
+          "id": "operates_in_england",
+          "type": "radio",
+          "label": "Does your organisation operate in England?",
+          "required": true,
+          "options": [
+            {"value": "yes", "label": "Yes"},
+            {"value": "no", "label": "No"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "proposal",
+      "title": "Your proposal",
+      "fields": [
+        {
+          "id": "project_name",
+          "type": "text",
+          "label": "Project name",
+          "required": true
+        },
+        {
+          "id": "fund_objective",
+          "type": "radio",
+          "label": "Which of the three fund objectives does your project align to?",
+          "required": true,
+          "options": [
+            {"value": "community_support", "label": "Community-based support"},
+            {"value": "day_services", "label": "Day services enhancement"},
+            {"value": "recovery_support", "label": "Recovery support"}
+          ]
+        },
+        {
+          "id": "local_challenge",
+          "type": "textarea",
+          "label": "Describe the homelessness challenge in your area (use local evidence)",
+          "required": true
+        },
+        {
+          "id": "project_summary",
+          "type": "textarea",
+          "label": "Summary of your proposed project",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "funding",
+      "title": "Funding requested",
+      "fields": [
+        {
+          "id": "funding_type",
+          "type": "radio",
+          "label": "What type of funding are you applying for?",
+          "required": true,
+          "options": [
+            {"value": "revenue", "label": "Revenue only"},
+            {"value": "capital", "label": "Capital only"},
+            {"value": "both", "label": "Both revenue and capital"}
+          ]
+        },
+        {
+          "id": "revenue_amount",
+          "type": "currency",
+          "label": "Revenue amount requested per year (£50,000 – £200,000)",
+          "required": false
+        },
+        {
+          "id": "capital_amount",
+          "type": "currency",
+          "label": "Capital amount requested (£50,000 – £200,000)",
+          "required": false
+        },
+        {
+          "id": "capital_year",
+          "type": "radio",
+          "label": "If capital, in which year do you need it?",
+          "required": false,
+          "options": [
+            {"value": "year_1", "label": "Year 1 (2026–27)"},
+            {"value": "year_2", "label": "Year 2 (2027–28)"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "deliverability",
+      "title": "Deliverability",
+      "fields": [
+        {
+          "id": "milestones",
+          "type": "textarea",
+          "label": "Key milestones and governance arrangements",
+          "required": true
+        },
+        {
+          "id": "risks",
+          "type": "textarea",
+          "label": "Top risks and how you'll mitigate them",
+          "required": true
+        },
+        {
+          "id": "la_endorsement",
+          "type": "file",
+          "label": "Upload letter of endorsement from local authority homelessness / rough sleeping lead officer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "declaration",
+      "title": "Declaration",
+      "fields": [
+        {
+          "id": "contact_name",
+          "type": "text",
+          "label": "Authorised contact name",
+          "required": true
+        },
+        {
+          "id": "contact_email",
+          "type": "text",
+          "label": "Authorised contact email",
+          "required": true
+        },
+        {
+          "id": "agree_terms",
+          "type": "checkbox",
+          "label": "I confirm the information provided is accurate and I am authorised to submit this application",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

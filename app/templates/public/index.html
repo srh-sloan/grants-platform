@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
+{% from 'govuk_frontend_jinja/components/tag/macro.html' import govukTag %}
+
+{% block title %}Open grants{% endblock %}
+
+{% block content %}
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1 class="govuk-heading-xl">Grants platform</h1>
+      <p class="govuk-body-l">
+        Apply for government grant funding for voluntary, community, and faith sector work.
+      </p>
+
+      <h2 class="govuk-heading-l">Open grants</h2>
+
+      {% if grants %}
+        <ul class="govuk-list" data-testid="grant-list">
+          {% for grant in grants %}
+            <li class="govuk-!-margin-bottom-6">
+              <h3 class="govuk-heading-m govuk-!-margin-bottom-1">
+                {{ grant.name }}
+                {{ govukTag({"text": "Open", "classes": "govuk-tag--green govuk-!-margin-left-2"}) }}
+              </h3>
+              {% if grant.summary %}
+                <p class="govuk-body">{{ grant.summary }}</p>
+              {% endif %}
+              <p class="govuk-body-s govuk-hint">Slug: <code>{{ grant.slug }}</code></p>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="govuk-body">
+          No grants are open for applications yet. Run <code>python seed.py</code> to load
+          the seed data.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{
+  "id": "ehcf-assessment",
+  "version": 1,
+  "kind": "assessment",
+  "description": "Assessment form derived from the grant's criteria. The assessor UI should render one page with one scoring block per criterion (score 0-3 + notes).",
+  "scoring": {
+    "source": "grant.config_json.criteria",
+    "score_field": "score",
+    "notes_field": "notes",
+    "score_min": 0,
+    "score_max": 3,
+    "notes_required": true
+  }
+}

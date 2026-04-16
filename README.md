@@ -125,13 +125,21 @@ If Claude's output contradicts a rule there, that's a bug — fix the output,
 not the rule (unless the team agrees the rule is wrong, in which case change
 it once, in `CLAUDE.md`, so every future prompt picks it up).
 
-## Getting started (once code exists)
+## Getting started
 
 ```bash
-python -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-flask --app app run --debug
+pip install -e ".[dev]"
+
+# Create the DB and load EHCF grant + form definitions
+python seed.py
+
+# Run the app
+flask --app run run --debug
+
+# Run the tests
+pytest
 ```
 
 The SQLite file lives at `./grants.db` by default.

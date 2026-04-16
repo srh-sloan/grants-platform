@@ -3,4 +3,29 @@ name = "grants-platform"
 version = "0.1.0"
 description = "Prototype grants application and assessment system. First grant: Ending Homelessness in Communities Fund (EHCF)."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "Flask>=3.0",
+    "Flask-SQLAlchemy>=3.1",
+    "Flask-Login>=0.6",
+    "Flask-WTF>=1.2",
+    "SQLAlchemy>=2.0",
+    "govuk-frontend-jinja>=3.1",
+    "govuk-frontend-wtf>=3.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
