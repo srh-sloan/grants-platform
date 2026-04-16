@@ -13,11 +13,11 @@ They verify the full assess_application() contract:
 from __future__ import annotations
 
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.extensions import db as _db
 from app.models import (
     Application,
     ApplicationStatus,
@@ -26,10 +26,8 @@ from app.models import (
     Grant,
     GrantStatus,
     Organisation,
-    User,
     UserRole,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -109,19 +107,13 @@ def test_assess_application_creates_assessment(app, submitted_application):
     mock_response = _mock_claude_response(
         scores={"skills": 2, "proposal": 3},
         notes={"skills": "Good track record.", "proposal": "Strong alignment."},
-        gap={"_gap_analysis": "Solid overall."},
-        recommendation="fund",
-    )
-    # Fix: gap_analysis should be a string
-    mock_response = _mock_claude_response(
-        scores={"skills": 2, "proposal": 3},
-        notes={"skills": "Good track record.", "proposal": "Strong alignment."},
         gap="Solid overall, strong proposal.",
         recommendation="fund",
     )
 
     with app.app_context():
-        with patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+             patch("anthropic.Anthropic") as mock_anthropic_cls:
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -149,7 +141,8 @@ def test_assess_application_is_idempotent(app, submitted_application):
     )
 
     with app.app_context():
-        with patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+             patch("anthropic.Anthropic") as mock_anthropic_cls:
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -178,7 +171,8 @@ def test_assess_application_handles_bad_json(app, submitted_application):
     message.content = [MagicMock(text="Sorry, I cannot score this application.")]
 
     with app.app_context():
-        with patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+             patch("anthropic.Anthropic") as mock_anthropic_cls:
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = message
@@ -204,7 +198,8 @@ def test_assess_application_auto_reject_on_zero(app, submitted_application):
     )
 
     with app.app_context():
-        with patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+             patch("anthropic.Anthropic") as mock_anthropic_cls:
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -233,7 +228,8 @@ def test_assess_application_upserts_ai_user(app, submitted_application):
         ai_user = User.query.filter_by(email="ai-assessor@system.local").first()
         assert ai_user is None
 
-        with patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+             patch("anthropic.Anthropic") as mock_anthropic_cls:
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
@@ -259,7 +255,8 @@ def test_assess_application_strips_markdown_fences(app, submitted_application):
     message.content = [MagicMock(text="```json\n" + payload + "\n```")]
 
     with app.app_context():
-        with patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+             patch("anthropic.Anthropic") as mock_anthropic_cls:
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = message

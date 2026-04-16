@@ -31,8 +31,6 @@ import textwrap
 from datetime import UTC, datetime
 from email.mime.text import MIMEText
 
-import anthropic
-
 from app.extensions import db
 from app.models import (
     Application,
@@ -139,7 +137,10 @@ def _parse_response(text: str) -> dict:
 
 def _send_notification(assessment: Assessment) -> None:
     """Email the assessment result to NOTIFY_EMAIL. Fails silently if unconfigured."""
-    recipient = os.environ.get("NOTIFY_EMAIL", "ross.mckelvie@fylde.gov.uk")
+    recipient = os.environ.get("NOTIFY_EMAIL", "")
+    if not recipient:
+        log.info("NOTIFY_EMAIL not configured — skipping notification")
+        return
     smtp_host = os.environ.get("SMTP_HOST", "localhost")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER", "")
@@ -264,6 +265,13 @@ def assess_application(application_id: int) -> Assessment | None:
     if not api_key:
         log.error("assess_application: ANTHROPIC_API_KEY not set")
         return None
+
+    try:
+        import anthropic
+    except ImportError:
+        log.error("assess_application: anthropic SDK not installed")
+        return None
+
     client = anthropic.Anthropic(api_key=api_key)
     log.info("assess_application: calling Claude for application %s", application_id)
     message = client.messages.create(
@@ -271,6 +279,9 @@ def assess_application(application_id: int) -> Assessment | None:
         max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
+    if not message.content:
+        log.error("assess_application: empty response from Claude")
+        return None
     raw = message.content[0].text
 
     try:
