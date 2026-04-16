@@ -45,7 +45,15 @@ from app.models import (
     User,
     UserRole,
 )
-from app.scoring import calculate_weighted_score, has_auto_reject, max_weighted_total
+from app.scoring import (
+    all_criteria_scored,
+    calculate_weighted_score,
+    decision_allowed,
+    declaration_gate_status,
+    eligibility_gate_status,
+    has_auto_reject,
+    max_weighted_total,
+)
 
 log = logging.getLogger(__name__)
 
@@ -269,15 +277,28 @@ def application_detail(app_id: int):
     application = _get_application_or_404(app_id)
     assessment = Assessment.query.filter_by(application_id=app_id).first()
     criteria = application.grant.config_json.get("criteria", [])
+    eligibility_rules = application.grant.config_json.get("eligibility", [])
     form = _CsrfForm()
+
+    scores = assessment.scores_json if assessment else None
+    elig_status = eligibility_gate_status(scores)
+    decl_status = declaration_gate_status(scores)
+    scoring_complete = all_criteria_scored(scores, criteria)
+    can_decide, decide_reason = decision_allowed(scores, criteria)
 
     return render_template(
         "assessor/application_detail.html",
         application=application,
         assessment=assessment,
         criteria=criteria,
+        eligibility_rules=eligibility_rules,
         max_total=max_weighted_total(criteria),
         form=form,
+        elig_status=elig_status,
+        decl_status=decl_status,
+        scoring_complete=scoring_complete,
+        can_decide=can_decide,
+        decide_reason=decide_reason,
     )
 
 
@@ -326,10 +347,18 @@ def save_score(app_id: int):
     auto_rejected = has_auto_reject(scores, criteria)
     weighted_total = calculate_weighted_score(scores, criteria)
 
+    old_scores = assessment.scores_json or {}
     old_notes = assessment.notes_json or {}
-    assessment.scores_json = scores
+    # Preserve gate keys and internal metadata alongside criterion scores
+    assessment.scores_json = {
+        **scores,
+        "_eligibility_passed": old_scores.get("_eligibility_passed"),
+        "_declaration_passed": old_scores.get("_declaration_passed"),
+    }
     assessment.notes_json = {
         **notes,
+        "_eligibility_notes": old_notes.get("_eligibility_notes", ""),
+        "_declaration_notes": old_notes.get("_declaration_notes", ""),
         "_gap_analysis": old_notes.get("_gap_analysis", ""),
         "_decision_notes": old_notes.get("_decision_notes", ""),
         "_flagged": old_notes.get("_flagged", False),
@@ -340,6 +369,81 @@ def save_score(app_id: int):
 
     db.session.commit()
     flash("Scores saved.", "success")
+    return redirect(url_for("assessor.application_detail", app_id=app_id))
+
+
+@bp.post("/<int:app_id>/eligibility-gate")
+@assessor_required
+def eligibility_gate(app_id: int):
+    """Save the eligibility gate determination (pass/fail + notes)."""
+    application = _get_application_or_404(app_id)
+    form = _CsrfForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    raw_passed = request.form.get("eligibility_passed", "").strip()
+    elig_notes = request.form.get("eligibility_notes", "").strip()
+
+    if raw_passed not in ("true", "false"):
+        flash("Select Pass or Fail for the eligibility check.", "error")
+        return redirect(url_for("assessor.application_detail", app_id=app_id))
+
+    if not elig_notes:
+        flash("Eligibility notes are required.", "error")
+        return redirect(url_for("assessor.application_detail", app_id=app_id))
+
+    passed = raw_passed == "true"
+
+    assessment = _get_or_create_assessment(application)
+    old_scores = assessment.scores_json or {}
+    old_notes = assessment.notes_json or {}
+
+    assessment.scores_json = {**old_scores, "_eligibility_passed": passed}
+    assessment.notes_json = {**old_notes, "_eligibility_notes": elig_notes}
+
+    db.session.commit()
+
+    if passed:
+        flash("Eligibility check passed. Proceed to scoring.", "success")
+    else:
+        flash(
+            "Eligibility check failed. You may record a reject decision.",
+            "warning",
+        )
+    return redirect(url_for("assessor.application_detail", app_id=app_id))
+
+
+@bp.post("/<int:app_id>/declaration-gate")
+@assessor_required
+def declaration_gate(app_id: int):
+    """Save the declaration gate (pass/fail + notes)."""
+    application = _get_application_or_404(app_id)
+    form = _CsrfForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    raw_passed = request.form.get("declaration_passed", "").strip()
+    decl_notes = request.form.get("declaration_notes", "").strip()
+
+    if raw_passed not in ("true", "false"):
+        flash("Select Pass or Fail for the declaration.", "error")
+        return redirect(url_for("assessor.application_detail", app_id=app_id))
+
+    if not decl_notes:
+        flash("Declaration notes are required.", "error")
+        return redirect(url_for("assessor.application_detail", app_id=app_id))
+
+    passed = raw_passed == "true"
+
+    assessment = _get_or_create_assessment(application)
+    old_scores = assessment.scores_json or {}
+    old_notes = assessment.notes_json or {}
+
+    assessment.scores_json = {**old_scores, "_declaration_passed": passed}
+    assessment.notes_json = {**old_notes, "_declaration_notes": decl_notes}
+
+    db.session.commit()
+    flash("Declaration recorded.", "success")
     return redirect(url_for("assessor.application_detail", app_id=app_id))
 
 
@@ -375,6 +479,15 @@ def record_decision(app_id: int):
     if not form.validate_on_submit():
         abort(400)
 
+    # Enforce multi-stage gate flow
+    criteria = application.grant.config_json.get("criteria", [])
+    existing = Assessment.query.filter_by(application_id=app_id).first()
+    scores = existing.scores_json if existing else None
+    allowed, reason = decision_allowed(scores, criteria)
+    if not allowed:
+        flash(reason, "error")
+        return redirect(url_for("assessor.application_detail", app_id=app_id))
+
     rec_value = request.form.get("recommendation", "").strip()
     decision_notes = request.form.get("decision_notes", "").strip()
 
@@ -382,6 +495,12 @@ def record_decision(app_id: int):
         recommendation = AssessmentRecommendation(rec_value)
     except ValueError:
         flash("Invalid recommendation value.", "error")
+        return redirect(url_for("assessor.application_detail", app_id=app_id))
+
+    # If eligibility failed, only reject is valid
+    elig = eligibility_gate_status(scores)
+    if elig is False and recommendation != AssessmentRecommendation.REJECT:
+        flash("Eligibility failed — only a reject decision is allowed.", "error")
         return redirect(url_for("assessor.application_detail", app_id=app_id))
 
     if not decision_notes:
