@@ -20,8 +20,5 @@
 
 {% block bodyEnd %}
   <script type="module" src="{{ url_for('static', filename='govuk-frontend.min.js') }}"></script>
-  <script type="module">
-    import {{ '{' }} initAll {{ '}' }} from "{{ url_for('static', filename='govuk-frontend.min.js') }}"
-    initAll()
-  </script>
+  <script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
 {% endblock %}

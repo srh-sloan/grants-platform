@@ -52,6 +52,7 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
 
     _register_blueprints(app)
     _register_error_handlers(app)
+    _register_security_headers(app)
     _register_cli(app)
     _register_external_validators(app)
 
@@ -137,6 +138,44 @@ def _register_error_handlers(app: Flask) -> None:
     @app.errorhandler(500)
     def _server_error(_err):
         return render_template("errors/500.html"), 500
+
+
+def _register_security_headers(app: Flask) -> None:
+    """Set conservative security response headers on every response.
+
+    CSP allows ``'self'`` plus inline styles (GOV.UK Frontend components
+    emit a small amount of inline CSS via ``style=`` on generated SVGs).
+    Scripts are ``'self'`` only; the bootstrap ``initAll()`` call lives in
+    ``static/app.js``. HSTS is only meaningful behind TLS but is cheap to
+    emit — browsers ignore it on plain HTTP.
+    """
+
+    @app.after_request
+    def _apply_headers(response):
+        headers = response.headers
+        headers.setdefault("X-Content-Type-Options", "nosniff")
+        headers.setdefault("X-Frame-Options", "DENY")
+        headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        headers.setdefault(
+            "Permissions-Policy",
+            "geolocation=(), microphone=(), camera=()",
+        )
+        headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "img-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'",
+        )
+        if not app.debug and not app.config.get("TESTING"):
+            headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
+        return response
 
 
 def _register_cli(app: Flask) -> None:
