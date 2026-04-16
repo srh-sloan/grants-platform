@@ -322,7 +322,9 @@ def _notify_applicant(
         server.sendmail(smtp_from, [recipient], msg.as_string())
         server.quit()
         log.info("Outcome notification sent to %s", recipient)
-    except Exception as exc:
+    except (smtplib.SMTPException, OSError) as exc:
+        # Mail is best-effort from the user's point of view — the outcome
+        # is already recorded in the DB. Log and continue.
         log.warning("Failed to send outcome notification: %s", exc)
 
 

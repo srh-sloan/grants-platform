@@ -16,6 +16,7 @@ All routes require the ADMIN role.
 
 from __future__ import annotations
 
+import csv
 import json
 from functools import wraps
 
@@ -222,7 +223,7 @@ def import_grant():
     if is_csv:
         try:
             structured = parse_prospectus_csv(content)
-        except Exception as exc:
+        except (csv.Error, ValueError, KeyError) as exc:
             flash(f"CSV parse error: {exc}", "error")
             return render_template("admin/grant_import.html")
 

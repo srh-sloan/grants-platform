@@ -251,7 +251,8 @@ def _send_notification(assessment: Assessment) -> None:
         server.sendmail(smtp_from, [recipient], msg.as_string())
         server.quit()
         log.info("Assessment notification sent to %s", recipient)
-    except Exception as exc:
+    except (smtplib.SMTPException, OSError) as exc:
+        # Fire-and-forget: the assessment row is already committed.
         log.warning("Failed to send assessment notification: %s", exc)
 
 
