@@ -1,4 +1,4 @@
-"""Assessor routes: queue, application detail, scoring, decision, allocation, user management.
+"""Assessor routes: queue, application detail, scoring, decision, allocation, user management, monitoring.
 
 **Stream ownership:** Assessor & scoring (Stream C).
 
@@ -11,6 +11,8 @@ GET  /assess/<app_id>             -- detail: answers + AI assessment + scoring f
 POST /assess/<app_id>/score       -- save manual scores
 POST /assess/<app_id>/flag        -- flag for moderation review
 POST /assess/<app_id>/decision    -- record final decision + notify applicant
+GET  /assess/<app_id>/monitoring  -- monitoring plan view
+POST /assess/<app_id>/monitoring  -- generate monitoring plan via AI
 GET  /assess/allocation           -- ranked allocation dashboard
 GET  /assess/users                -- list assessor/admin users (admin only)
 GET  /assess/users/new            -- form to create a new assessor account (admin only)
@@ -19,6 +21,7 @@ POST /assess/users/new            -- create the assessor account
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import smtplib
@@ -543,6 +546,196 @@ def record_decision(app_id: int):
 
     flash("Decision recorded and applicant notified.", "success")
     return redirect(url_for("assessor.application_detail", app_id=app_id))
+
+
+# ---------------------------------------------------------------------------
+# Monitoring plan
+# ---------------------------------------------------------------------------
+
+
+def _parse_json_response(text: str) -> dict | None:
+    """Extract a JSON object from a model response, stripping markdown fences."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        inner = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+        text = "\n".join(inner)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _call_claude_for_monitoring(prompt: str) -> dict | None:
+    """Call Claude to generate a monitoring plan. Returns parsed JSON or None."""
+    try:
+        import anthropic
+    except ImportError:
+        log.error("anthropic SDK not installed — cannot generate monitoring plan")
+        return None
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+        except ImportError:
+            pass
+    if not api_key:
+        log.error("ANTHROPIC_API_KEY not set — cannot generate monitoring plan")
+        return None
+
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = message.content[0].text
+    return _parse_json_response(raw)
+
+
+def _build_monitoring_prompt(application: Application) -> str:
+    """Build the prompt for monitoring plan generation from application data."""
+    grant = application.grant
+    config = grant.config_json or {}
+    criteria = config.get("criteria", [])
+    award_ranges = config.get("award_ranges", {})
+    duration = award_ranges.get("duration_years", 3)
+
+    org = application.organisation
+    org_name = org.name if org else "Unknown"
+
+    answers = application.answers_json or {}
+    answers_block = "\n".join(
+        f"  {key}: {json.dumps(value, ensure_ascii=False)}"
+        for key, value in answers.items()
+    ) or "  (no answers provided)"
+
+    # Build scores block from the assessment
+    assessment = Assessment.query.filter_by(application_id=application.id).first()
+    scores_lines = []
+    if assessment and assessment.scores_json:
+        for c in criteria:
+            cid = c["id"]
+            score = assessment.scores_json.get(cid, "N/A")
+            scores_lines.append(f"  {c['label']}: {score}/{c['max']}")
+    scores_block = "\n".join(scores_lines) or "  (no scores available)"
+
+    funding_parts = []
+    if award_ranges.get("revenue_min") and award_ranges.get("revenue_max"):
+        funding_parts.append(
+            "Revenue: {}-{}/year".format(
+                award_ranges["revenue_min"], award_ranges["revenue_max"]
+            )
+        )
+    if award_ranges.get("capital_min") and award_ranges.get("capital_max"):
+        funding_parts.append(
+            "Capital: {}-{}".format(
+                award_ranges["capital_min"], award_ranges["capital_max"]
+            )
+        )
+    funding_info = "; ".join(funding_parts) or "Not specified"
+
+    # Try to extract a project name from answers
+    project_name = "Not specified"
+    for page_answers in answers.values():
+        if isinstance(page_answers, dict):
+            for key, val in page_answers.items():
+                if "project" in key.lower() and "name" in key.lower() and val:
+                    project_name = str(val)
+                    break
+
+    # JSON example kept as a plain string to avoid f-string brace escaping
+    json_example = (
+        '{\n'
+        '  "kpis": [\n'
+        '    {\n'
+        '      "name": "KPI name",\n'
+        '      "definition": "What this measures",\n'
+        '      "target": "Target value or description",\n'
+        '      "baseline": "Current baseline or placeholder",\n'
+        '      "evidence_source": "How it will be measured",\n'
+        '      "reporting_frequency": "quarterly|annually|six-monthly",\n'
+        '      "owner": "Who reports on this"\n'
+        '    }\n'
+        '  ],\n'
+        '  "milestones": [\n'
+        '    {\n'
+        '      "period": "Month 1-3",\n'
+        '      "description": "What should be achieved",\n'
+        '      "evidence_required": "What evidence to collect"\n'
+        '    }\n'
+        '  ],\n'
+        '  "risk_review_points": ["Month 6", "Month 12", "Month 24"],\n'
+        '  "summary": "Brief monitoring plan narrative"\n'
+        '}'
+    )
+
+    return (
+        f"You are a monitoring and evaluation specialist for the {grant.name} programme.\n\n"
+        f"## Application details\n"
+        f"Organisation: {org_name}\n"
+        f"Project: {project_name}\n"
+        f"Funding requested: {funding_info}\n\n"
+        f"## Application answers\n{answers_block}\n\n"
+        f"## Scoring criteria and scores\n{scores_block}\n\n"
+        f"## Task\n"
+        f"Generate a monitoring plan for this approved application. "
+        f"Return ONLY valid JSON with this structure:\n\n"
+        f"{json_example}\n\n"
+        f"Generate 4-6 KPIs covering outputs, outcomes, and system strengthening. "
+        f"Include 4-6 milestones across the {duration} year programme. "
+        f"Base KPIs on what the applicant has promised in their answers."
+    )
+
+
+@bp.get("/<int:app_id>/monitoring")
+@assessor_required
+def monitoring(app_id: int):
+    application = _get_application_or_404(app_id)
+    assessment = Assessment.query.filter_by(application_id=app_id).first()
+
+    plan = None
+    if assessment and assessment.notes_json:
+        plan = assessment.notes_json.get("_monitoring_plan")
+
+    form = _CsrfForm()
+    return render_template(
+        "assessor/monitoring.html",
+        application=application,
+        assessment=assessment,
+        plan=plan,
+        form=form,
+    )
+
+
+@bp.post("/<int:app_id>/monitoring")
+@assessor_required
+def generate_monitoring(app_id: int):
+    application = _get_application_or_404(app_id)
+    form = _CsrfForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    prompt = _build_monitoring_prompt(application)
+    plan = _call_claude_for_monitoring(prompt)
+
+    if plan is None:
+        flash(
+            "Failed to generate monitoring plan. Check that ANTHROPIC_API_KEY is set.",
+            "error",
+        )
+        return redirect(url_for("assessor.monitoring", app_id=app_id))
+
+    assessment = _get_or_create_assessment(application)
+    old_notes = assessment.notes_json or {}
+    assessment.notes_json = {**old_notes, "_monitoring_plan": plan}
+    db.session.commit()
+
+    flash("Monitoring plan generated.", "success")
+    return redirect(url_for("assessor.monitoring", app_id=app_id))
 
 
 # ---------------------------------------------------------------------------

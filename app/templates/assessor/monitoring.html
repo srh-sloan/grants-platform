@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% from 'govuk_frontend_jinja/components/table/macro.html' import govukTable %}
+{% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
+{% from 'govuk_frontend_jinja/components/tag/macro.html' import govukTag %}
+{% from 'govuk_frontend_jinja/components/notification-banner/macro.html' import govukNotificationBanner %}
+{% from 'govuk_frontend_jinja/components/inset-text/macro.html' import govukInsetText %}
+
+{% block title %}Monitoring plan -- {{ (application.organisation.name | trim) if application.organisation else "Application " + application.id | string }}{% endblock %}
+
+{% block content %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-full">
+
+    {# Flash messages #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        {% if category == "success" %}
+          {{ govukNotificationBanner({"type": "success", "html": "<p class='govuk-body'>" + message + "</p>"}) }}
+        {% elif category == "error" %}
+          <div class="govuk-error-summary">
+            <p class="govuk-body govuk-error-message">{{ message }}</p>
+          </div>
+        {% else %}
+          <div class="govuk-inset-text">
+            <p class="govuk-body">{{ message }}</p>
+          </div>
+        {% endif %}
+      {% endfor %}
+    {% endwith %}
+
+    <a class="govuk-back-link" href="{{ url_for('assessor.application_detail', app_id=application.id) }}">Back to application</a>
+
+    <span class="govuk-caption-xl">{{ application.grant.name if application.grant else "Unknown grant" }}</span>
+    <h1 class="govuk-heading-xl">
+      Monitoring plan
+    </h1>
+
+    <p class="govuk-body-l">
+      {{ (application.organisation.name | trim) if application.organisation else "Unknown organisation" }}
+      &mdash; Application {{ application.id }}
+    </p>
+
+    {% if not plan %}
+      {# No plan generated yet #}
+      {{ govukInsetText({"text": "No monitoring plan has been generated for this application yet. Use the button below to generate one using AI."}) }}
+
+      <form method="post" action="{{ url_for('assessor.generate_monitoring', app_id=application.id) }}">
+        {{ form.hidden_tag() }}
+        {{ govukButton({"text": "Generate monitoring plan", "classes": "govuk-button"}) }}
+      </form>
+
+    {% else %}
+      {# Plan exists -- display it #}
+
+      {# Summary #}
+      {% if plan.get("summary") %}
+        <h2 class="govuk-heading-l">Summary</h2>
+        <p class="govuk-body">{{ plan["summary"] }}</p>
+      {% endif %}
+
+      {# KPIs table #}
+      {% if plan.get("kpis") %}
+        <h2 class="govuk-heading-l">Key performance indicators</h2>
+
+        {{ govukTable({
+          "head": [
+            {"text": "KPI"},
+            {"text": "Definition"},
+            {"text": "Target"},
+            {"text": "Baseline"},
+            {"text": "Evidence source"},
+            {"text": "Frequency"},
+            {"text": "Owner"}
+          ],
+          "rows": plan["kpis"] | map(attribute=None) | list if false else [],
+          "classes": "govuk-table"
+        }) if false }}
+
+        <table class="govuk-table">
+          <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Key performance indicators</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th class="govuk-table__header" scope="col">KPI</th>
+              <th class="govuk-table__header" scope="col">Definition</th>
+              <th class="govuk-table__header" scope="col">Target</th>
+              <th class="govuk-table__header" scope="col">Baseline</th>
+              <th class="govuk-table__header" scope="col">Evidence source</th>
+              <th class="govuk-table__header" scope="col">Frequency</th>
+              <th class="govuk-table__header" scope="col">Owner</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            {% for kpi in plan["kpis"] %}
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">{{ kpi.get("name", "") }}</td>
+                <td class="govuk-table__cell">{{ kpi.get("definition", "") }}</td>
+                <td class="govuk-table__cell">{{ kpi.get("target", "") }}</td>
+                <td class="govuk-table__cell">{{ kpi.get("baseline", "") }}</td>
+                <td class="govuk-table__cell">{{ kpi.get("evidence_source", "") }}</td>
+                <td class="govuk-table__cell">{{ kpi.get("reporting_frequency", "") }}</td>
+                <td class="govuk-table__cell">{{ kpi.get("owner", "") }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+
+      {# Milestones table #}
+      {% if plan.get("milestones") %}
+        <h2 class="govuk-heading-l">Milestones</h2>
+
+        <table class="govuk-table">
+          <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Milestones</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th class="govuk-table__header" scope="col">Period</th>
+              <th class="govuk-table__header" scope="col">Description</th>
+              <th class="govuk-table__header" scope="col">Evidence required</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            {% for ms in plan["milestones"] %}
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">{{ ms.get("period", "") }}</td>
+                <td class="govuk-table__cell">{{ ms.get("description", "") }}</td>
+                <td class="govuk-table__cell">{{ ms.get("evidence_required", "") }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+
+      {# Risk review points #}
+      {% if plan.get("risk_review_points") %}
+        <h2 class="govuk-heading-l">Risk review points</h2>
+        <ul class="govuk-list govuk-list--bullet">
+          {% for point in plan["risk_review_points"] %}
+            <li>{{ point }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      {# Regenerate button #}
+      <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+      <form method="post" action="{{ url_for('assessor.generate_monitoring', app_id=application.id) }}">
+        {{ form.hidden_tag() }}
+        {{ govukButton({"text": "Regenerate monitoring plan", "classes": "govuk-button govuk-button--secondary"}) }}
+      </form>
+
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
