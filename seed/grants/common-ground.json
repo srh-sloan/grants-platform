@@ -1,0 +1,133 @@
+{
+  "slug": "common-ground",
+  "name": "Common Ground Award",
+  "status": "open",
+  "summary": "Capital grants of up to £10,000 (or up to £50,000 for exceptional scale-up) for VCSE organisations in England delivering projects that bridge social capital across communities.",
+  "contact_email": "CGA@communities.gov.uk",
+  "eligibility": [
+    {
+      "id": "org_type",
+      "type": "in",
+      "label": "Organisation must be a VCSE body (charity, CIO, CIC, CBS, social enterprise, or faith-based organisation)",
+      "values": ["charity", "CIO", "CIC", "CBS", "social_enterprise", "faith_based"]
+    },
+    {
+      "id": "operates_in_england",
+      "type": "equals",
+      "label": "Organisation has a base in and operates in England",
+      "value": true
+    },
+    {
+      "id": "charitable_purpose",
+      "type": "equals",
+      "label": "Organisation exists for charitable, benevolent, or philanthropic purposes",
+      "value": true
+    },
+    {
+      "id": "not_public_sector",
+      "type": "equals",
+      "label": "Organisation is not a local authority, public sector body, profit-distributing entity, or education sector organisation",
+      "value": true
+    }
+  ],
+  "criteria": [
+    {
+      "id": "strategic_alignment",
+      "label": "Strategic alignment — alignment with the fund's bridging social capital objective",
+      "weight": 25,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "Evidence that the project aligns with the fund's objective of bridging social capital — bringing together people from different backgrounds, communities, or organisations to build trust, understanding, and shared purpose.",
+        "scores": {
+          "0": "No evidence of alignment with the bridging social capital objective. Project appears focused on bonding capital within a single community or has no clear social capital aim.",
+          "1": "Some reference to bridging social capital but the link between project activities and the fund objective is weak or superficial.",
+          "2": "Clear alignment with the bridging social capital objective. The project is designed to bring different groups together with a plausible theory of change.",
+          "3": "Exceptional alignment. The project demonstrates deep understanding of bridging social capital, with activities directly designed to connect diverse communities and a compelling rationale for how this will be achieved."
+        }
+      }
+    },
+    {
+      "id": "community_engagement",
+      "label": "Community engagement — engagement with communities and organisations",
+      "weight": 25,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "Evidence that the organisation engages meaningfully with the communities it serves and partners with other organisations. This includes co-design, consultation, partnership working, and responsiveness to community needs.",
+        "scores": {
+          "0": "No evidence of community engagement. The project appears designed without input from the communities it intends to serve.",
+          "1": "Some engagement is described but it is limited, tokenistic, or not clearly linked to the project design.",
+          "2": "Credible community engagement. The organisation demonstrates ongoing relationships with target communities and has involved them in shaping the project.",
+          "3": "Outstanding engagement. The project is co-designed with diverse community members and organisations. There is clear evidence of sustained, reciprocal relationships and a track record of responsive, community-led work."
+        }
+      }
+    },
+    {
+      "id": "community_impact",
+      "label": "Community impact — demonstrable outcomes including interaction, trust, networks, and wellbeing",
+      "weight": 25,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "Clear, measurable outcomes for communities — increased interaction across groups, improved trust, stronger networks, and enhanced wellbeing. The application should describe how impact will be evidenced.",
+        "scores": {
+          "0": "No measurable outcomes defined, or outcomes are purely activity-based (e.g. number of events held) with no link to social capital or wellbeing.",
+          "1": "Some outcomes are stated but they are vague, unmeasurable, or not clearly linked to bridging social capital.",
+          "2": "Clear outcomes with appropriate indicators. The application explains how increased interaction, trust, networks, or wellbeing will be measured.",
+          "3": "Ambitious, specific, and measurable outcomes across multiple dimensions of social capital and wellbeing. Includes a credible approach to evidence collection and a realistic theory of change."
+        }
+      }
+    },
+    {
+      "id": "sustainability",
+      "label": "Sustainability — longer-term plans and evaluation approach",
+      "weight": 13,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "Evidence that the project has a plan for sustainability beyond the grant period and an approach to evaluating its impact. The sustainability score also drives award size — higher scores may unlock larger awards where fund availability permits.",
+        "scores": {
+          "0": "No consideration of sustainability or evaluation. The project appears to end entirely when funding stops.",
+          "1": "Some mention of sustainability but plans are vague or unrealistic. Evaluation approach is minimal.",
+          "2": "Credible sustainability plan with identified funding sources or partnership commitments. A clear evaluation approach is described.",
+          "3": "Exceptional sustainability planning. The project is designed to become self-sustaining or to embed lasting change. Evaluation is robust, with plans to share learning. This score may support a larger award where fund availability permits."
+        }
+      }
+    },
+    {
+      "id": "use_of_funding",
+      "label": "Use of funding — reasonable use of capital investment",
+      "weight": 12,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "A clear and reasonable capital spending plan. Items should be appropriate for a capital grant (physical assets, equipment, refurbishment — not staffing or running costs). Costs should be realistic and represent value for money.",
+        "scores": {
+          "0": "No spending plan provided, or the proposed items are not capital expenditure (e.g. staff costs, revenue activities).",
+          "1": "A spending plan is provided but items are poorly justified, costs seem inflated, or the link between capital items and project outcomes is unclear.",
+          "2": "Clear capital spending plan with reasonable costs. Items are appropriate and linked to project delivery.",
+          "3": "Excellent value for money. Every item is justified with evidence (e.g. quotes, benchmarks). The capital investment clearly enables the bridging social capital outcomes described elsewhere in the application."
+        }
+      }
+    }
+  ],
+  "award_ranges": {
+    "capital_min": 1000,
+    "capital_max": 10000,
+    "scale_up_max": 50000,
+    "total_budget": 1700000,
+    "duration_years": 1,
+    "notes": "Standard awards up to £10,000. Exceptional scale-up awards up to £50,000 based on high sustainability score and fund availability."
+  },
+  "timeline": {
+    "opens_on": "2025-10-13",
+    "closes_on": "2025-11-21",
+    "assessment_window": "2025-12",
+    "outcome_notification": "2026-01",
+    "funding_committed_by": "2026-03-31"
+  },
+  "forms": {
+    "application": "common-ground-application-v1"
+  }
+}

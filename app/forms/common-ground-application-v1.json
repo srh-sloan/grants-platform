@@ -1,0 +1,148 @@
+{
+  "id": "common-ground-application",
+  "version": 1,
+  "kind": "application",
+  "pages": [
+    {
+      "id": "organisation",
+      "title": "About your organisation",
+      "fields": [
+        {"id": "name", "type": "text", "label": "Organisation name", "required": true},
+        {
+          "id": "org_type",
+          "type": "radio",
+          "label": "Organisation type",
+          "required": true,
+          "options": [
+            {"value": "charity", "label": "Registered charity"},
+            {"value": "CIO", "label": "Charitable Incorporated Organisation (CIO)"},
+            {"value": "CIC", "label": "Community Interest Company (CIC, non profit-distributing)"},
+            {"value": "CBS", "label": "Community Benefit Society"},
+            {"value": "social_enterprise", "label": "Social enterprise"},
+            {"value": "faith_based", "label": "Faith-based organisation"}
+          ]
+        },
+        {
+          "id": "registration_number",
+          "type": "text",
+          "label": "Charity or company registration number",
+          "required": true
+        },
+        {
+          "id": "operates_in_england",
+          "type": "radio",
+          "label": "Does your organisation have a base in and operate in England?",
+          "required": true,
+          "options": [
+            {"value": "yes", "label": "Yes"},
+            {"value": "no", "label": "No"}
+          ]
+        },
+        {
+          "id": "charitable_purpose",
+          "type": "radio",
+          "label": "Does your organisation exist for charitable, benevolent, or philanthropic purposes?",
+          "required": true,
+          "options": [
+            {"value": "yes", "label": "Yes"},
+            {"value": "no", "label": "No"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "your_work",
+      "title": "Your work and community engagement",
+      "fields": [
+        {
+          "id": "bridging_social_capital",
+          "type": "textarea",
+          "label": "Describe how your project will bridge social capital — bringing together people from different backgrounds, communities, or organisations",
+          "required": true,
+          "word_limit": 500
+        },
+        {
+          "id": "community_engagement",
+          "type": "textarea",
+          "label": "How does your organisation engage with the communities you serve? Describe your approach to partnership and co-design",
+          "required": true,
+          "word_limit": 500
+        },
+        {
+          "id": "outcomes",
+          "type": "textarea",
+          "label": "What outcomes do you expect from this project? Describe expected changes in interaction, trust, networks, or wellbeing",
+          "required": true,
+          "word_limit": 500
+        },
+        {
+          "id": "sustainability",
+          "type": "textarea",
+          "label": "How will the benefits of this project be sustained after the funding ends? Describe your longer-term plans and evaluation approach",
+          "required": true,
+          "word_limit": 500
+        }
+      ]
+    },
+    {
+      "id": "funding",
+      "title": "Funding request",
+      "fields": [
+        {
+          "id": "capital_amount",
+          "type": "currency",
+          "label": "Capital amount requested (up to £10,000, or up to £50,000 for exceptional scale-up)",
+          "required": true
+        },
+        {
+          "id": "capital_items",
+          "type": "textarea",
+          "label": "List the capital items you will purchase with this grant, with estimated costs for each",
+          "required": true,
+          "word_limit": 500
+        },
+        {
+          "id": "scale_up",
+          "type": "radio",
+          "label": "Are you applying for the exceptional scale-up award (above £10,000)?",
+          "required": true,
+          "options": [
+            {"value": "no", "label": "No — standard award (up to £10,000)"},
+            {"value": "yes", "label": "Yes — exceptional scale-up (up to £50,000)"}
+          ]
+        },
+        {
+          "id": "scale_up_justification",
+          "type": "textarea",
+          "label": "If applying for scale-up, explain why a larger award is needed and how it will be used",
+          "required": false,
+          "word_limit": 300
+        }
+      ]
+    },
+    {
+      "id": "declaration",
+      "title": "Declaration",
+      "fields": [
+        {
+          "id": "contact_name",
+          "type": "text",
+          "label": "Authorised contact name",
+          "required": true
+        },
+        {
+          "id": "contact_email",
+          "type": "text",
+          "label": "Authorised contact email",
+          "required": true
+        },
+        {
+          "id": "agree_terms",
+          "type": "checkbox",
+          "label": "I confirm the information provided is accurate, the organisation is not a local authority, public sector body, profit-distributing entity, or education sector organisation, and I am authorised to submit this application",
+          "required": true
+        }
+      ]
+    }
+  ]
+}
