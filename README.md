@@ -165,14 +165,15 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install deps (uv creates .venv and installs the locked versions)
 uv sync
 
-# Load EHCF grant + form into SQLite
-uv run python seed.py
-
 # Start the dev server on http://127.0.0.1:5000
+# The first request auto-seeds EHCF grant + forms + demo users into SQLite.
 uv run flask --app wsgi run --debug
 
 # Run the tests
 uv run pytest
+
+# Reset the DB (drops tables, recreates schema, re-seeds)
+uv run flask --app wsgi reset-db
 ```
 
 ### Option B -- Docker Compose (one command, zero host deps)
@@ -202,7 +203,7 @@ docker compose down -v
 | Run a single test | `uv run pytest tests/test_scoring.py -k weighted` |
 | Lint | `uv run ruff check .` |
 | Auto-fix lint | `uv run ruff check . --fix` |
-| Reset the DB | `rm grants.db && uv run python seed.py` |
+| Reset the DB | `uv run flask --app wsgi reset-db` |
 | Reset inside Docker | `docker compose run --rm web python seed.py --reset` |
 
 ### Environment variables

@@ -63,7 +63,7 @@
             <tr class="govuk-table__row {% if over_budget %}govuk-!-background-colour-red{% endif %}">
               <td class="govuk-table__cell">{{ ns.rank }}</td>
               <td class="govuk-table__cell">
-                {{ application.organisation.name if application.organisation else "—" }}
+                {{ (application.organisation.name | trim) if application.organisation else "—" }}
               </td>
               <td class="govuk-table__cell">
                 {{ application.grant.name if application.grant else "—" }}

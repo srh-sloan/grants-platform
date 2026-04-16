@@ -39,6 +39,17 @@ Field type extensions:
 Word count is ``len(value.split())``: whitespace-separated tokens.  The check
 only runs when the field has a non-empty value; a blank value on a required
 textarea reports a required error, not a word-count error.
+
+Conditional visibility (P4.3):
+
+Any field may include an optional ``visible_when`` object that controls whether
+the field is shown and validated::
+
+    "visible_when": {"field": "funding_type", "operator": "in", "value": ["capital", "both"]}
+
+Supported operators: ``in``, ``equals``, ``not_equals``.  When a field is
+hidden (condition evaluates false), it is skipped during validation so a
+hidden required field does not produce an error.
 """
 
 from __future__ import annotations
@@ -103,6 +114,46 @@ def get_page_position(schema: dict, page_id: str) -> tuple[int, int]:
 
 
 # ---------------------------------------------------------------------------
+# Conditional visibility (P4.3)
+# ---------------------------------------------------------------------------
+
+
+def is_field_visible(field: dict, answers: dict) -> bool:
+    """Evaluate whether *field* should be shown given current *answers*.
+
+    Returns ``True`` when the field has no ``visible_when`` condition or when
+    the condition is met.  *answers* is a flat ``{field_id: value}`` dict for
+    the current page.
+
+    Supported operators:
+
+    - ``"in"``         — answer value is contained in the given list.
+    - ``"equals"``     — answer value equals the given scalar.
+    - ``"not_equals"`` — answer value does not equal the given scalar.
+    """
+    condition = field.get("visible_when")
+    if not condition:
+        return True
+
+    trigger_value = answers.get(condition["field"])
+    operator = condition["operator"]
+
+    if operator == "in":
+        return trigger_value in condition["value"]
+    if operator == "equals":
+        return trigger_value == condition["value"]
+    if operator == "not_equals":
+        return trigger_value != condition["value"]
+
+    raise ValueError(f"Unknown visible_when operator: {operator!r}")
+
+
+def visible_fields(page: dict, answers: dict) -> list[dict]:
+    """Return only the fields from *page* that should be displayed."""
+    return [f for f in (page.get("fields") or []) if is_field_visible(f, answers)]
+
+
+# ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
@@ -127,6 +178,11 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
             raise ValueError(
                 f"Field {field.get('id')!r} has unsupported type {field.get('type')!r}"
             )
+
+        # Skip validation for fields hidden by a visible_when condition.
+        if not is_field_visible(field, submitted):
+            continue
+
         field_id: str = field["id"]
         value = submitted.get(field_id)
 

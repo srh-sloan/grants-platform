@@ -7,7 +7,7 @@
 {% from 'govuk_frontend_jinja/components/notification-banner/macro.html' import govukNotificationBanner %}
 {% from 'govuk_frontend_jinja/components/warning-text/macro.html' import govukWarningText %}
 
-{% block title %}Application {{ application.id }} -- {{ application.organisation.name if application.organisation else "Unknown" }}{% endblock %}
+{% block title %}Application {{ application.id }} -- {{ (application.organisation.name | trim) if application.organisation else "Unknown" }}{% endblock %}
 
 {% set STATUS_TAG = {
   "submitted":    "govuk-tag--purple",
@@ -49,7 +49,7 @@
     <div class="govuk-grid-row govuk-!-margin-top-4">
       <div class="govuk-grid-column-two-thirds">
         <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">
-          {{ application.organisation.name if application.organisation else "Application " + application.id | string }}
+          {{ (application.organisation.name | trim) if application.organisation else "Application " + application.id | string }}
         </h1>
         <p class="govuk-body-l govuk-!-margin-bottom-2">
           {{ application.grant.name if application.grant else "Unknown grant" }}
@@ -99,7 +99,7 @@
               </p>
               <p class="govuk-body">
                 {% if value is string %}
-                  {{ value }}
+                  {{ value | trim }}
                 {% elif value is iterable %}
                   {{ value | join(", ") }}
                 {% else %}
@@ -118,10 +118,95 @@
     {% endif %}
   </div>
 
-  {# RIGHT: Assessment panel #}
+  {# RIGHT: Assessment panel — 3 stages #}
   <div class="govuk-grid-column-one-half">
 
-    {# AI assessment summary #}
+    {# ================================================================ #}
+    {# STAGE 1: Eligibility gate                                        #}
+    {# ================================================================ #}
+    <h2 class="govuk-heading-l">Stage 1: Eligibility check</h2>
+
+    {# Show eligibility rules from grant config #}
+    {% if eligibility_rules %}
+      <table class="govuk-table govuk-!-margin-bottom-4">
+        <caption class="govuk-table__caption govuk-table__caption--s">Eligibility criteria</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th class="govuk-table__header">Rule</th>
+            <th class="govuk-table__header">Requirement</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          {% for rule in eligibility_rules %}
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">{{ rule["label"] }}</td>
+              <td class="govuk-table__cell">
+                {% if rule["type"] == "in" %}
+                  One of: {{ rule["values"] | join(", ") }}
+                {% elif rule["type"] == "equals" %}
+                  {{ rule["value"] }}
+                {% elif rule["type"] == "max" %}
+                  At most {{ rule["value"] }}
+                {% elif rule["type"] == "min" %}
+                  At least {{ rule["value"] }}
+                {% else %}
+                  {{ rule.get("value", "—") }}
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if elig_status is not none %}
+      {# Gate already completed — show result #}
+      {% if elig_status %}
+        {{ govukTag({"text": "Eligibility: PASS", "classes": "govuk-tag--green"}) }}
+      {% else %}
+        {{ govukTag({"text": "Eligibility: FAIL", "classes": "govuk-tag--red"}) }}
+      {% endif %}
+      {% if assessment and assessment.notes_json and assessment.notes_json.get("_eligibility_notes") %}
+        {{ govukInsetText({"text": assessment.notes_json["_eligibility_notes"]}) }}
+      {% endif %}
+    {% else %}
+      {# Eligibility form #}
+      <form method="post" action="{{ url_for('assessor.eligibility_gate', app_id=application.id) }}" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="govuk-form-group">
+          <fieldset class="govuk-fieldset">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
+              Does this application meet the eligibility criteria?
+            </legend>
+            <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" id="eligibility_passed_true" name="eligibility_passed" type="radio" value="true">
+                <label class="govuk-label govuk-radios__label" for="eligibility_passed_true">Pass</label>
+              </div>
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" id="eligibility_passed_false" name="eligibility_passed" type="radio" value="false">
+                <label class="govuk-label govuk-radios__label" for="eligibility_passed_false">Fail</label>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label govuk-label--s" for="eligibility_notes">Eligibility notes</label>
+          <div class="govuk-hint">Record your reasoning for the eligibility determination.</div>
+          <textarea class="govuk-textarea" id="eligibility_notes" name="eligibility_notes" rows="3"></textarea>
+        </div>
+
+        <button class="govuk-button" type="submit">Confirm eligibility</button>
+      </form>
+    {% endif %}
+
+    <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+    {# ================================================================ #}
+    {# AI assessment summary (unchanged position)                       #}
+    {# ================================================================ #}
     {% if assessment %}
       <h2 class="govuk-heading-l">AI assessment</h2>
 
@@ -186,39 +271,107 @@
 
     <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
 
-    {# Manual scoring form #}
-    <h2 class="govuk-heading-l">Manual scoring</h2>
-    <p class="govuk-hint">Score each criterion 0 to {{ criteria[0].max if criteria else 3 }}. Notes are mandatory.</p>
+    {# ================================================================ #}
+    {# STAGE 2: Manual scoring                                          #}
+    {# ================================================================ #}
+    <h2 class="govuk-heading-l">Stage 2: Scored evaluation</h2>
 
-    <form method="post" action="{{ url_for('assessor.save_score', app_id=application.id) }}" novalidate>
-      {{ form.hidden_tag() }}
+    {% if elig_status is none %}
+      {{ govukInsetText({"text": "Complete the eligibility check before scoring."}) }}
+    {% elif elig_status == false %}
+      {{ govukInsetText({"text": "Eligibility check failed. Scoring is not required — proceed to record a reject decision below."}) }}
+    {% else %}
+      <p class="govuk-hint">Score each criterion 0 to {{ criteria[0].max if criteria else 3 }}. Notes are mandatory.</p>
 
-      {% for c in criteria %}
-        <div class="govuk-form-group govuk-!-margin-bottom-4">
+      <form method="post" action="{{ url_for('assessor.save_score', app_id=application.id) }}" novalidate>
+        {{ form.hidden_tag() }}
+
+        {% for c in criteria %}
+          <div class="govuk-form-group govuk-!-margin-bottom-4">
+            <fieldset class="govuk-fieldset">
+              <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
+                {{ c.label }}
+                {% if c.get("auto_reject_on_zero") %}
+                  <span class="govuk-tag govuk-tag--red govuk-!-margin-left-2">Auto-reject if 0</span>
+                {% endif %}
+                <span class="govuk-hint">Weight: {{ c.weight }}%</span>
+              </legend>
+
+              <label class="govuk-label" for="score_{{ c.id }}">Score (0 to {{ c.max }})</label>
+              <input class="govuk-input govuk-input--width-2" type="number"
+                     id="score_{{ c.id }}" name="score_{{ c.id }}"
+                     min="0" max="{{ c.max }}"
+                     value="{{ assessment.scores_json.get(c.id, '') if assessment and assessment.scores_json else '' }}">
+
+              <label class="govuk-label govuk-!-margin-top-2" for="notes_{{ c.id }}">Notes</label>
+              <textarea class="govuk-textarea" id="notes_{{ c.id }}" name="notes_{{ c.id }}"
+                        rows="3">{{ assessment.notes_json.get(c.id, '') if assessment and assessment.notes_json else '' }}</textarea>
+            </fieldset>
+          </div>
+        {% endfor %}
+
+        <button class="govuk-button" type="submit">Save scores</button>
+      </form>
+    {% endif %}
+
+    <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+    {# ================================================================ #}
+    {# STAGE 3: Declaration gate                                        #}
+    {# ================================================================ #}
+    <h2 class="govuk-heading-l">Stage 3: Declaration</h2>
+
+    {% if elig_status == false %}
+      {{ govukInsetText({"text": "Eligibility failed. Declaration is not required."}) }}
+    {% elif not scoring_complete or elig_status is none %}
+      {{ govukInsetText({"text": "Complete eligibility and score all criteria before the declaration."}) }}
+    {% elif decl_status is not none %}
+      {# Declaration already completed — show result #}
+      {% if decl_status %}
+        {{ govukTag({"text": "Declaration: PASS", "classes": "govuk-tag--green"}) }}
+      {% else %}
+        {{ govukTag({"text": "Declaration: FAIL", "classes": "govuk-tag--red"}) }}
+      {% endif %}
+      {% if assessment and assessment.notes_json and assessment.notes_json.get("_declaration_notes") %}
+        {{ govukInsetText({"text": assessment.notes_json["_declaration_notes"]}) }}
+      {% endif %}
+    {% else %}
+      <form method="post" action="{{ url_for('assessor.declaration_gate', app_id=application.id) }}" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="govuk-form-group">
           <fieldset class="govuk-fieldset">
             <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
-              {{ c.label }}
-              {% if c.get("auto_reject_on_zero") %}
-                <span class="govuk-tag govuk-tag--red govuk-!-margin-left-2">Auto-reject if 0</span>
-              {% endif %}
-              <span class="govuk-hint">Weight: {{ c.weight }}%</span>
+              Declaration
             </legend>
-
-            <label class="govuk-label" for="score_{{ c.id }}">Score (0 to {{ c.max }})</label>
-            <input class="govuk-input govuk-input--width-2" type="number"
-                   id="score_{{ c.id }}" name="score_{{ c.id }}"
-                   min="0" max="{{ c.max }}"
-                   value="{{ assessment.scores_json.get(c.id, '') if assessment and assessment.scores_json else '' }}">
-
-            <label class="govuk-label govuk-!-margin-top-2" for="notes_{{ c.id }}">Notes</label>
-            <textarea class="govuk-textarea" id="notes_{{ c.id }}" name="notes_{{ c.id }}"
-                      rows="3">{{ assessment.notes_json.get(c.id, '') if assessment and assessment.notes_json else '' }}</textarea>
+            <p class="govuk-body">I confirm that:</p>
+            <ul class="govuk-list govuk-list--bullet">
+              <li>This assessment has been completed without conflicts of interest</li>
+              <li>The scoring reflects my professional judgement</li>
+              <li>There are no process irregularities to report</li>
+            </ul>
+            <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" id="declaration_passed_true" name="declaration_passed" type="radio" value="true">
+                <label class="govuk-label govuk-radios__label" for="declaration_passed_true">Pass</label>
+              </div>
+              <div class="govuk-radios__item">
+                <input class="govuk-radios__input" id="declaration_passed_false" name="declaration_passed" type="radio" value="false">
+                <label class="govuk-label govuk-radios__label" for="declaration_passed_false">Fail</label>
+              </div>
+            </div>
           </fieldset>
         </div>
-      {% endfor %}
 
-      <button class="govuk-button" type="submit">Save scores</button>
-    </form>
+        <div class="govuk-form-group">
+          <label class="govuk-label govuk-label--s" for="declaration_notes">Declaration notes</label>
+          <div class="govuk-hint">Record any notes about the integrity of this assessment.</div>
+          <textarea class="govuk-textarea" id="declaration_notes" name="declaration_notes" rows="3"></textarea>
+        </div>
+
+        <button class="govuk-button" type="submit">Submit declaration</button>
+      </form>
+    {% endif %}
 
     <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
 
@@ -238,34 +391,46 @@
     {# Decision form #}
     <h2 class="govuk-heading-l">Record decision</h2>
 
-    {% if application.status.value in ("approved", "rejected") %}
-      {{ govukWarningText({
-        "text": "A decision has already been recorded for this application. Submitting this form will update it.",
-        "iconFallbackText": "Warning"
-      }) }}
+    {% if not can_decide %}
+      {{ govukInsetText({"text": decide_reason}) }}
+    {% else %}
+
+      {% if application.status.value in ("approved", "rejected") %}
+        {{ govukWarningText({
+          "text": "A decision has already been recorded for this application. Submitting this form will update it.",
+          "iconFallbackText": "Warning"
+        }) }}
+      {% endif %}
+
+      <form method="post" action="{{ url_for('assessor.record_decision', app_id=application.id) }}" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="govuk-form-group">
+          <label class="govuk-label govuk-label--s" for="recommendation">Recommendation</label>
+          {% if elig_status == false %}
+            <div class="govuk-hint">Eligibility failed — only reject is available.</div>
+            <select class="govuk-select" id="recommendation" name="recommendation">
+              <option value="reject" selected>Reject</option>
+            </select>
+          {% else %}
+            <select class="govuk-select" id="recommendation" name="recommendation">
+              <option value="">Select recommendation</option>
+              <option value="fund" {% if assessment and assessment.recommendation and assessment.recommendation.value == "fund" %}selected{% endif %}>Fund</option>
+              <option value="reject" {% if assessment and assessment.recommendation and assessment.recommendation.value == "reject" %}selected{% endif %}>Reject</option>
+              <option value="refer" {% if assessment and assessment.recommendation and assessment.recommendation.value == "refer" %}selected{% endif %}>Refer to panel</option>
+            </select>
+          {% endif %}
+        </div>
+
+        <div class="govuk-form-group">
+          <label class="govuk-label govuk-label--s" for="decision_notes">Decision notes</label>
+          <div class="govuk-hint">These notes will be included in the notification email to the applicant.</div>
+          <textarea class="govuk-textarea" id="decision_notes" name="decision_notes" rows="4">{{ assessment.notes_json.get("_decision_notes", "") if assessment and assessment.notes_json else "" }}</textarea>
+        </div>
+
+        <button class="govuk-button" type="submit">Record decision and notify applicant</button>
+      </form>
     {% endif %}
-
-    <form method="post" action="{{ url_for('assessor.record_decision', app_id=application.id) }}" novalidate>
-      {{ form.hidden_tag() }}
-
-      <div class="govuk-form-group">
-        <label class="govuk-label govuk-label--s" for="recommendation">Recommendation</label>
-        <select class="govuk-select" id="recommendation" name="recommendation">
-          <option value="">Select recommendation</option>
-          <option value="fund" {% if assessment and assessment.recommendation and assessment.recommendation.value == "fund" %}selected{% endif %}>Fund</option>
-          <option value="reject" {% if assessment and assessment.recommendation and assessment.recommendation.value == "reject" %}selected{% endif %}>Reject</option>
-          <option value="refer" {% if assessment and assessment.recommendation and assessment.recommendation.value == "refer" %}selected{% endif %}>Refer to panel</option>
-        </select>
-      </div>
-
-      <div class="govuk-form-group">
-        <label class="govuk-label govuk-label--s" for="decision_notes">Decision notes</label>
-        <div class="govuk-hint">These notes will be included in the notification email to the applicant.</div>
-        <textarea class="govuk-textarea" id="decision_notes" name="decision_notes" rows="4">{{ assessment.notes_json.get("_decision_notes", "") if assessment and assessment.notes_json else "" }}</textarea>
-      </div>
-
-      <button class="govuk-button" type="submit">Record decision and notify applicant</button>
-    </form>
 
   </div>
 </div>

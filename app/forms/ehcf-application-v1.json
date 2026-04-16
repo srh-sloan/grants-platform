@@ -25,7 +25,12 @@
           "id": "registration_number",
           "type": "text",
           "label": "Charity or company registration number",
-          "required": true
+          "hint": "For example 1234567 for a charity, 12345678 for a company, or SC012345 for a Scottish organisation. We check this against the UK charity and company registers.",
+          "required": true,
+          "external_validator": {
+            "name": "find_that_charity",
+            "context_fields": ["org_type"]
+          }
         },
         {
           "id": "annual_income",
@@ -124,6 +129,48 @@
             {"value": "year_1", "label": "Year 1 (2026–27)"},
             {"value": "year_2", "label": "Year 2 (2027–28)"}
           ]
+        },
+        {
+          "id": "planning_permission",
+          "type": "radio",
+          "label": "Do you have planning permission for the capital works?",
+          "required": true,
+          "visible_when": {
+            "field": "funding_type",
+            "operator": "in",
+            "value": ["capital", "both"]
+          },
+          "options": [
+            {"value": "yes", "label": "Yes"},
+            {"value": "no", "label": "No"},
+            {"value": "not_required", "label": "Not required"}
+          ]
+        },
+        {
+          "id": "contractor_identified",
+          "type": "radio",
+          "label": "Have you identified a contractor?",
+          "required": true,
+          "visible_when": {
+            "field": "funding_type",
+            "operator": "in",
+            "value": ["capital", "both"]
+          },
+          "options": [
+            {"value": "yes", "label": "Yes"},
+            {"value": "no", "label": "No"}
+          ]
+        },
+        {
+          "id": "capital_readiness",
+          "type": "textarea",
+          "label": "Describe your capital readiness (planning permission, tenure, contractor status)",
+          "required": true,
+          "visible_when": {
+            "field": "funding_type",
+            "operator": "in",
+            "value": ["capital", "both"]
+          }
         }
       ]
     },

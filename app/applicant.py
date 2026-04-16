@@ -24,6 +24,7 @@ from types import SimpleNamespace
 from flask import (
     Blueprint,
     abort,
+    current_app,
     flash,
     redirect,
     render_template,
@@ -38,6 +39,7 @@ from werkzeug.datastructures import MultiDict
 
 from app.auth import applicant_required
 from app.extensions import db
+from app.external_validators import validate_page_external
 from app.forms_runner import (
     evaluate_eligibility,
     get_page,
@@ -121,6 +123,14 @@ def _page_errors_across_form(application: Application, form: Form) -> dict[str, 
     Used on the review page so the applicant can see what's still missing
     before submitting, and by :func:`submit` to refuse submission when
     anything is outstanding.
+
+    External-validator checks are deliberately *not* re-run here — they're
+    enforced at page-save time. Re-running them on every review/submit view
+    would mean hammering third-party registers every time the applicant
+    opens the summary, and a transient outage would silently undo an already-
+    saved green check. If a validator's verdict needs to be re-verified at
+    submit time, that belongs in the submit handler (where we accept a
+    single round-trip).
     """
     result: dict[str, dict[str, str]] = {}
     answers = application.answers_json or {}
@@ -129,6 +139,27 @@ def _page_errors_across_form(application: Application, form: Form) -> dict[str, 
         if errors:
             result[page["id"]] = errors
     return result
+
+
+def _run_external_validators(page: dict, submitted: dict) -> dict[str, str]:
+    """Run external validators for ``page`` if the feature is enabled.
+
+    Wraps :func:`app.external_validators.validate_page_external` with a
+    config-flag check so airgapped / test environments skip the I/O entirely
+    without the schema needing to change.
+
+    Returns an empty dict when the feature is disabled or no field on the
+    page declares a validator.
+    """
+    if not current_app.config.get("EXTERNAL_VALIDATORS_ENABLED", False):
+        return {}
+    errors, metadata = validate_page_external(page, submitted)
+    if metadata:
+        # Stash the matched organisation names so the review summary can
+        # show "Verified: <name>" next to each validated answer. We don't
+        # block on this — it's purely informational.
+        current_app.logger.debug("external validator metadata: %s", metadata)
+    return errors
 
 
 def _first_page_id(form: Form) -> str:
@@ -177,6 +208,15 @@ def _extract_field_values(page: dict, form_data: MultiDict) -> dict[str, object]
             # separately in save_page. We return None here; save_page
             # supplements with the existing saved answer before validation.
             extracted[fid] = None
+        elif ftype == "date":
+            # govukDateInput submits three separate fields: fid-day, fid-month, fid-year.
+            day   = (form_data.get(f"{fid}-day")   or "").strip()
+            month = (form_data.get(f"{fid}-month") or "").strip()
+            year  = (form_data.get(f"{fid}-year")  or "").strip()
+            if day and month and year:
+                extracted[fid] = f"{year.zfill(4)}-{month.zfill(2)}-{day.zfill(2)}"
+            else:
+                extracted[fid] = ""  # empty string triggers required validation
         else:
             value = form_data.get(fid)
             if isinstance(value, str):
@@ -222,7 +262,6 @@ def dashboard():
         applications=applications,
         available_grants=available_grants,
         start_form=_ActionForm(),
-        logout_form=_ActionForm(),
     )
 
 
@@ -273,6 +312,7 @@ def eligibility(grant_slug: str):
         csrf_form=_ActionForm(),
         all_pages=None,
         current_index=0,
+        form_caption="Eligibility check",
     )
 
 
@@ -316,6 +356,7 @@ def eligibility_post(grant_slug: str):
             csrf_form=_ActionForm(),
             all_pages=None,
             current_index=0,
+            form_caption="Eligibility check",
         )
         return rendered, 400
 
@@ -494,6 +535,16 @@ def save_page(app_id: int, page_id: str):
             )
 
     errors = {**validate_page(page, submitted), **upload_errors}
+
+    # Layer external-register checks on top of basic validation. External
+    # validators run in their own module so the form runner stays pure; we
+    # merge the results here rather than passing I/O into ``validate_page``.
+    # A field that already failed required / word-limit checks is never
+    # sent off to an external API — no point asking the Charity Commission
+    # whether a blank value exists.
+    external_errors = _run_external_validators(page, submitted)
+    for field_id, message in external_errors.items():
+        errors.setdefault(field_id, message)
 
     if errors:
         # Roll back any staged Document rows — the page wasn't fully valid.

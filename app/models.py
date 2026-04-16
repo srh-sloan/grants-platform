@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from flask_login import UserMixin
 from sqlalchemy import JSON
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.extensions import db
 
@@ -85,6 +85,17 @@ class Organisation(db.Model):
 
     users: Mapped[list[User]] = relationship(back_populates="organisation")
     applications: Mapped[list[Application]] = relationship(back_populates="organisation")
+
+    @validates("name", "contact_name")
+    def _strip_whitespace(self, _key: str, value: str | None) -> str | None:
+        """Trim leading/trailing whitespace on applicant-entered names.
+
+        Applies to every write path (register form, seed scripts, direct model
+        edits) so the DB never holds a padded value.
+        """
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class User(UserMixin, db.Model):

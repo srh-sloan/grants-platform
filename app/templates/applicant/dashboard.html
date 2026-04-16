@@ -30,17 +30,9 @@
       <p class="govuk-body-l">
         Signed in as <strong>{{ current_user.email }}</strong>
         {% if current_user.organisation %}
-          for <strong>{{ current_user.organisation.name }}</strong>
+          for <strong>{{ current_user.organisation.name | trim }}</strong>
         {% endif %}.
       </p>
-
-      <form method="post" action="{{ url_for('auth.logout') }}" class="govuk-!-margin-bottom-6">
-        {{ logout_form.hidden_tag() }}
-        {{ govukButton({
-          "text": "Sign out",
-          "classes": "govuk-button--secondary"
-        }) }}
-      </form>
 
       <h2 class="govuk-heading-l">Applications in progress</h2>
 

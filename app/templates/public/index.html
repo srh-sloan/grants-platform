@@ -27,14 +27,17 @@
               {% if grant.summary %}
                 <p class="govuk-body">{{ grant.summary }}</p>
               {% endif %}
-              <p class="govuk-body-s govuk-hint">Slug: <code>{{ grant.slug }}</code></p>
+              {% if current_user.is_authenticated and current_user.is_applicant %}
+                {{ govukButton({"text": "Apply for this grant", "href": url_for("applicant.eligibility", grant_slug=grant.slug), "classes": "govuk-button--start govuk-!-margin-bottom-0"}) }}
+              {% else %}
+                {{ govukButton({"text": "Apply for this grant", "href": url_for("auth.login", next=url_for("applicant.eligibility", grant_slug=grant.slug)), "classes": "govuk-button--start govuk-!-margin-bottom-0"}) }}
+              {% endif %}
             </li>
           {% endfor %}
         </ul>
       {% else %}
         <p class="govuk-body">
-          No grants are open for applications yet. Run <code>python seed.py</code> to load
-          the seed data.
+          There are no grants open for applications at the moment. Check back soon.
         </p>
       {% endif %}
     </div>

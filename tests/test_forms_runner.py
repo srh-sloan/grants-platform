@@ -10,10 +10,12 @@ import pytest
 from app.forms_runner import (
     SUPPORTED_FIELD_TYPES,
     get_page,
+    is_field_visible,
     list_pages,
     merge_page_answers,
     next_page_id,
     validate_page,
+    visible_fields,
 )
 
 SCHEMA = {
@@ -185,3 +187,166 @@ def test_ehcf_local_challenge_and_project_summary_have_word_limit():
     }
     assert fields_by_id["local_challenge"].get("word_limit") == 500
     assert fields_by_id["project_summary"].get("word_limit") == 500
+
+
+# ---------------------------------------------------------------------------
+# Conditional visibility — is_field_visible (P4.3)
+# ---------------------------------------------------------------------------
+
+_CONDITIONAL_FIELD = {
+    "id": "capital_readiness",
+    "type": "textarea",
+    "label": "Describe your capital readiness",
+    "required": True,
+    "visible_when": {
+        "field": "funding_type",
+        "operator": "in",
+        "value": ["capital", "both"],
+    },
+}
+
+_UNCONDITIONAL_FIELD = {
+    "id": "project_name",
+    "type": "text",
+    "label": "Project name",
+    "required": True,
+}
+
+
+def test_is_field_visible_no_condition():
+    """A field without visible_when is always visible."""
+    assert is_field_visible(_UNCONDITIONAL_FIELD, {}) is True
+    assert is_field_visible(_UNCONDITIONAL_FIELD, {"anything": "value"}) is True
+
+
+def test_is_field_visible_in_operator_match():
+    """'in' operator returns True when the trigger value is in the list."""
+    assert is_field_visible(_CONDITIONAL_FIELD, {"funding_type": "capital"}) is True
+    assert is_field_visible(_CONDITIONAL_FIELD, {"funding_type": "both"}) is True
+
+
+def test_is_field_visible_in_operator_no_match():
+    """'in' operator returns False when the trigger value is not in the list."""
+    assert is_field_visible(_CONDITIONAL_FIELD, {"funding_type": "revenue"}) is False
+    # Missing trigger field also means not visible.
+    assert is_field_visible(_CONDITIONAL_FIELD, {}) is False
+
+
+def test_is_field_visible_equals_operator():
+    """'equals' operator compares against a single value."""
+    field = {
+        "id": "detail",
+        "type": "text",
+        "label": "Detail",
+        "required": False,
+        "visible_when": {"field": "choice", "operator": "equals", "value": "yes"},
+    }
+    assert is_field_visible(field, {"choice": "yes"}) is True
+    assert is_field_visible(field, {"choice": "no"}) is False
+    assert is_field_visible(field, {}) is False
+
+
+def test_is_field_visible_not_equals_operator():
+    """'not_equals' operator returns True when the value differs."""
+    field = {
+        "id": "alt",
+        "type": "text",
+        "label": "Alt",
+        "required": False,
+        "visible_when": {"field": "choice", "operator": "not_equals", "value": "no"},
+    }
+    assert is_field_visible(field, {"choice": "yes"}) is True
+    assert is_field_visible(field, {"choice": "no"}) is False
+    # Missing trigger value (None != "no") → visible.
+    assert is_field_visible(field, {}) is True
+
+
+def test_visible_fields_filters_correctly():
+    """visible_fields returns only the fields that pass their conditions."""
+    page = {
+        "fields": [
+            _UNCONDITIONAL_FIELD,
+            _CONDITIONAL_FIELD,
+        ]
+    }
+    # When funding_type is "revenue", the conditional field is hidden.
+    result = visible_fields(page, {"funding_type": "revenue"})
+    assert len(result) == 1
+    assert result[0]["id"] == "project_name"
+
+    # When funding_type is "capital", both are visible.
+    result = visible_fields(page, {"funding_type": "capital"})
+    assert len(result) == 2
+
+
+# ---------------------------------------------------------------------------
+# validate_page + conditional visibility (P4.3)
+# ---------------------------------------------------------------------------
+
+_VIS_PAGE = {
+    "fields": [
+        {
+            "id": "funding_type",
+            "type": "radio",
+            "label": "Funding type",
+            "required": True,
+            "options": [
+                {"value": "revenue", "label": "Revenue only"},
+                {"value": "capital", "label": "Capital only"},
+                {"value": "both", "label": "Both"},
+            ],
+        },
+        {
+            "id": "capital_readiness",
+            "type": "textarea",
+            "label": "Capital readiness",
+            "required": True,
+            "visible_when": {
+                "field": "funding_type",
+                "operator": "in",
+                "value": ["capital", "both"],
+            },
+        },
+    ]
+}
+
+
+def test_validate_page_skips_hidden_required_field():
+    """A required field hidden by visible_when must NOT produce an error."""
+    errors = validate_page(_VIS_PAGE, {"funding_type": "revenue"})
+    assert "capital_readiness" not in errors
+    assert errors == {}
+
+
+def test_validate_page_validates_visible_required_field():
+    """A required field shown by visible_when DOES produce an error if blank."""
+    errors = validate_page(_VIS_PAGE, {"funding_type": "capital"})
+    assert "capital_readiness" in errors
+    assert errors["capital_readiness"] == "This field is required"
+
+
+def test_validate_page_visible_field_passes_when_filled():
+    """A visible required field passes validation when a value is provided."""
+    errors = validate_page(
+        _VIS_PAGE,
+        {"funding_type": "both", "capital_readiness": "We have planning permission."},
+    )
+    assert errors == {}
+
+
+# ---------------------------------------------------------------------------
+# EHCF schema: conditional fields present (P4.3)
+# ---------------------------------------------------------------------------
+
+
+def test_ehcf_funding_page_has_conditional_capital_fields():
+    """The EHCF funding page has visible_when capital readiness fields."""
+    schema_path = pathlib.Path("app/forms/ehcf-application-v1.json")
+    schema = json.loads(schema_path.read_text())
+    funding_page = next(p for p in schema["pages"] if p["id"] == "funding")
+    conditional_ids = [
+        f["id"] for f in funding_page["fields"] if f.get("visible_when")
+    ]
+    assert "planning_permission" in conditional_ids
+    assert "contractor_identified" in conditional_ids
+    assert "capital_readiness" in conditional_ids

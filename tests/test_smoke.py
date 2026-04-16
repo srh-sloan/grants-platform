@@ -13,7 +13,7 @@ def test_landing_page_renders_empty(client):
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Grants platform" in body
-    assert "No grants are open" in body
+    assert "There are no grants open for applications at the moment" in body
 
 
 def test_landing_page_lists_seeded_grant(client, seeded_grant):

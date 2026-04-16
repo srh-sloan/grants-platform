@@ -35,7 +35,7 @@
       {% elif field.type == "currency" %}
         {% set display = "£" ~ raw %}
       {% else %}
-        {% set display = raw %}
+        {% set display = raw | trim if raw is string else raw %}
       {% endif %}
       {% set _ = rows.append({
         "key": {"text": field.label},

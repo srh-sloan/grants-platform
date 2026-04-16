@@ -185,6 +185,64 @@ def test_register_rejects_duplicate_email(client, db, make_user):
     assert "already exists" in body
 
 
+def test_register_strips_whitespace_from_organisation_name(client, db):
+    """Leading/trailing whitespace in the org name is trimmed on entry."""
+    response = client.post(
+        "/auth/register",
+        data={
+            "organisation_name": "  Shelter Bristol  ",
+            "email": "trim@example.test",
+            "password": "a-valid-password",
+            "confirm_password": "a-valid-password",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    user = db.session.execute(
+        select(User).where(User.email == "trim@example.test")
+    ).scalar_one()
+    assert user.organisation.name == "Shelter Bristol"
+
+
+def test_organisation_model_strips_name_and_contact_name(db):
+    """The Organisation model trims whitespace regardless of write path."""
+    org = Organisation(
+        name="  Padded Org  ",
+        contact_name="\tAlice Applicant\n",
+        contact_email="a@b.test",
+    )
+    db.session.add(org)
+    db.session.commit()
+
+    db.session.refresh(org)
+    assert org.name == "Padded Org"
+    assert org.contact_name == "Alice Applicant"
+
+
+def test_dashboard_trims_organisation_name_on_render(client, db, make_user):
+    """Legacy/padded org names are rendered clean on the applicant dashboard."""
+    user, password = make_user(
+        email="dash@example.test", organisation_name="Padded Org"
+    )
+    # Bypass the validator by patching directly in the DB to simulate legacy
+    # data that predates the strip-on-entry fix.
+    db.session.execute(
+        Organisation.__table__.update()
+        .where(Organisation.id == user.org_id)
+        .values(name="   Padded Org   ")
+    )
+    db.session.commit()
+
+    client.post(
+        "/auth/login",
+        data={"email": "dash@example.test", "password": password},
+    )
+    response = client.get("/apply/")
+    body = response.get_data(as_text=True)
+    assert "<strong>Padded Org</strong>" in body
+    assert "   Padded Org   " not in body
+
+
 def test_register_redirects_if_already_logged_in(client, make_user):
     _user, password = make_user(email="al@x.test")
     client.post("/auth/login", data={"email": "al@x.test", "password": password})
