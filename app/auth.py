@@ -54,7 +54,8 @@ from wtforms.validators import (
     ValidationError,
 )
 
-from app.extensions import db, login_manager
+from app.audit import audit_log
+from app.extensions import db, limiter, login_manager
 from app.models import Organisation, User, UserRole
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -100,6 +101,8 @@ def _role_required(*roles: UserRole) -> Callable[[Callable[..., Any]], Callable[
 applicant_required = _role_required(UserRole.APPLICANT)
 # Admins can access the assessor area (they land there after login).
 assessor_required = _role_required(UserRole.ASSESSOR, UserRole.ADMIN)
+# User management routes require the ADMIN role exclusively.
+admin_required = _role_required(UserRole.ADMIN)
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +116,12 @@ assessor_required = _role_required(UserRole.ASSESSOR, UserRole.ADMIN)
 _EMAIL_REGEX = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 _EMAIL_MESSAGE = "Enter an email address in the correct format, like name@example.com"
 _PASSWORD_MIN_LENGTH = 10
+# Require at least one uppercase letter, one lowercase letter, one digit, and one symbol.
+_PASSWORD_COMPLEXITY_REGEX = r"(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])"
+_PASSWORD_COMPLEXITY_MESSAGE = (
+    "Password must contain at least one uppercase letter, one lowercase letter, "
+    "one number, and one symbol"
+)
 
 
 class LoginForm(FlaskForm):
@@ -167,7 +176,7 @@ class RegisterForm(FlaskForm):
         "Password",
         description=(
             f"Must be at least {_PASSWORD_MIN_LENGTH} characters. "
-            "Use a mix of letters, numbers and symbols."
+            "Use a mix of uppercase and lowercase letters, numbers and symbols."
         ),
         widget=GovPasswordInput(),
         validators=[
@@ -179,6 +188,7 @@ class RegisterForm(FlaskForm):
                     f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"
                 ),
             ),
+            Regexp(_PASSWORD_COMPLEXITY_REGEX, message=_PASSWORD_COMPLEXITY_MESSAGE),
         ],
     )
     confirm_password = PasswordField(
@@ -239,6 +249,7 @@ def _is_safe_next_url(target: str | None) -> bool:
 
 
 @bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute; 50 per hour", methods=["POST"])
 def login():
     """Sign in an existing user. GET renders the form; POST validates it."""
     if current_user.is_authenticated:
@@ -256,6 +267,7 @@ def login():
             user.password_hash, form.password.data or ""
         ):
             login_user(user)
+            audit_log("LOGIN_SUCCESS", user_id=user.id, email=user.email, role=user.role.value)
             flash("You are signed in.", "success")
             if _is_safe_next_url(next_url):
                 return redirect(next_url)
@@ -263,12 +275,14 @@ def login():
 
         # Generic error to avoid leaking which half of the credentials is wrong
         # (and whether the email is registered at all).
+        audit_log("LOGIN_FAILED", user_id=None, email=email)
         form.password.errors.append("Email or password is incorrect")
 
     return render_template("auth/login.html", form=form, next_url=next_url)
 
 
 @bp.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per minute; 20 per hour", methods=["POST"])
 def register():
     """Create an applicant account plus its owning organisation."""
     if current_user.is_authenticated:
@@ -294,6 +308,7 @@ def register():
         db.session.commit()
 
         login_user(user)
+        audit_log("REGISTER_SUCCESS", user_id=user.id, email=email, org=organisation.name)
         flash(
             f"Account created for {organisation.name}. Start your application below.",
             "success",
@@ -307,6 +322,9 @@ def register():
 @login_required
 def logout():
     """Sign the current user out. POST-only to require CSRF."""
+    user_id = current_user.id
+    email = current_user.email
     logout_user()
+    audit_log("LOGOUT", user_id=user_id, email=email)
     flash("You have been signed out.", "success")
     return redirect(url_for("public.index"))

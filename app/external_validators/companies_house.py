@@ -41,6 +41,9 @@ from app.external_validators.base import (
 
 log = logging.getLogger(__name__)
 
+# SSRF protection: only ever contact the canonical Companies House API host.
+_ALLOWED_BASE_URL = "https://api.company-information.service.gov.uk"
+
 # Companies House numbers are 8 chars: either 8 digits, or 2 letters + 6 digits
 # (SC######, NI######, OC######, etc.). We accept either shape but normalise
 # to uppercase alphanumerics only before dispatch.
@@ -73,7 +76,7 @@ class CompaniesHouseValidator:
         api_key: str | None = None,
         fetcher: JsonFetcher = http_get_json,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
-        base_url: str = "https://api.company-information.service.gov.uk",
+        base_url: str = _ALLOWED_BASE_URL,
     ) -> None:
         # Allow env-based fallback so blueprints can ``register_validator(
         # CompaniesHouseValidator())`` once and pick up credentials from the
@@ -81,6 +84,13 @@ class CompaniesHouseValidator:
         self._api_key = api_key or os.environ.get("COMPANIES_HOUSE_API_KEY") or None
         self._fetch = fetcher
         self._timeout = timeout
+        # SSRF guard: when using the real HTTP fetcher, only the canonical host
+        # is permitted. Tests inject a fake fetcher so the URL never hits the
+        # network — they can supply any base_url for URL-construction assertions.
+        if fetcher is http_get_json and base_url.rstrip("/") != _ALLOWED_BASE_URL:
+            raise ValueError(
+                f"base_url must be '{_ALLOWED_BASE_URL}' when using the default HTTP fetcher."
+            )
         self._base_url = base_url.rstrip("/")
 
     def validate(self, value: str, context: dict[str, Any]) -> ValidationResult:

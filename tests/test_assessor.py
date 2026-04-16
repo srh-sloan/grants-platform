@@ -636,8 +636,8 @@ def test_edit_user_changes_password_when_provided(client, assessor, admin_user):
         data={
             "email": "assessor@test.com",
             "role": "assessor",
-            "new_password": "brand-new-secret-123",
-            "confirm_new_password": "brand-new-secret-123",
+            "new_password": "Brand!NewSecret123",
+            "confirm_new_password": "Brand!NewSecret123",
         },
         follow_redirects=False,
     )

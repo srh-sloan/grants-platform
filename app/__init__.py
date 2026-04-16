@@ -14,7 +14,7 @@ from flask import Flask
 from govuk_frontend_wtf.main import WTFormsHelpers
 from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
 
-from app.extensions import csrf, db, login_manager
+from app.extensions import csrf, db, limiter, login_manager
 
 # Blueprint modules, each exporting a ``bp`` attribute. Pre-seeded so streams
 # only edit their own file — no merge conflicts on this factory.
@@ -37,6 +37,7 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
 
     db.init_app(app)
     login_manager.init_app(app)
+    limiter.init_app(app)
     login_manager.login_view = "auth.login"
     # Suppress Flask-Login's default "Please log in to access this page." flash.
     # The sign-in page already explains its purpose and ``next=`` preserves the
@@ -51,6 +52,7 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
 
     _register_blueprints(app)
     _register_error_handlers(app)
+    _register_security_headers(app)
     _register_cli(app)
     _register_external_validators(app)
 
@@ -126,6 +128,18 @@ def _register_error_handlers(app: Flask) -> None:
     @app.errorhandler(500)
     def _server_error(_err):
         return render_template("errors/500.html"), 500
+
+
+def _register_security_headers(app: Flask) -> None:
+    """Add defensive HTTP headers to every response."""
+
+    @app.after_request
+    def _set_headers(response):
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
 
 
 def _register_cli(app: Flask) -> None:

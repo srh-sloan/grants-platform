@@ -24,7 +24,7 @@ from app.uploads import UploadRejected, list_documents, save_upload
 
 
 def _make_file(
-    content: bytes = b"test content",
+    content: bytes = b"%PDF-1.4 test content",
     filename: str = "test.pdf",
     content_type: str = "application/pdf",
 ) -> FileStorage:
@@ -61,13 +61,13 @@ class TestSaveUpload:
             doc = save_upload(
                 submitted_application,
                 "budget",
-                _make_file(content=b"hello world"),
+                _make_file(content=b"%PDF-1.4 hello world"),
             )
             upload_folder = app.config["UPLOAD_FOLDER"]
             full_path = os.path.join(upload_folder, doc.storage_path)
             assert os.path.isfile(full_path)
             with open(full_path, "rb") as f:
-                assert f.read() == b"hello world"
+                assert f.read() == b"%PDF-1.4 hello world"
 
     def test_rejects_empty_filename(self, app, submitted_application):
         with app.app_context(), pytest.raises(UploadRejected):
@@ -86,10 +86,10 @@ class TestSaveUpload:
             doc = save_upload(
                 submitted_application,
                 "la_letter",
-                _make_file(filename="../../../etc/passwd"),
+                _make_file(filename="../../../etc/report.pdf"),
             )
             assert ".." not in doc.storage_path
-            assert "etc" in doc.storage_path or "passwd" in doc.storage_path
+            assert "etc" in doc.storage_path or "report" in doc.storage_path
 
 
 # ---------------------------------------------------------------------------
@@ -128,17 +128,18 @@ class TestServeDocument:
         assert "/auth/login" in resp.headers.get("Location", "")
 
     def test_applicant_can_access_own(self, app, client, applicant_user, submitted_application):
+        pdf_content = b"%PDF-1.4 secret data"
         with app.app_context():
             doc = save_upload(
                 submitted_application,
                 "budget",
-                _make_file(content=b"secret data"),
+                _make_file(content=pdf_content),
             )
             doc_id = doc.id
         _login(client, applicant_user)
         resp = client.get(f"/uploads/{doc_id}")
         assert resp.status_code == 200
-        assert resp.data == b"secret data"
+        assert resp.data == pdf_content
 
     def test_applicant_cannot_access_others(self, app, client, applicant_user, submitted_application):
         """An applicant from a different org gets 403."""
