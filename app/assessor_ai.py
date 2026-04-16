@@ -184,9 +184,7 @@ def _send_notification(assessment: Assessment) -> None:
     application = assessment.application
     org_name = application.organisation.name if application.organisation else "Unknown"
     grant_name = application.grant.name if application.grant else "Unknown"
-    recommendation = (
-        assessment.recommendation.value.upper() if assessment.recommendation else "N/A"
-    )
+    recommendation = assessment.recommendation.value.upper() if assessment.recommendation else "N/A"
     gap_analysis = assessment.notes_json.get("_gap_analysis", "No summary available.")
 
     score_lines = []
@@ -199,7 +197,8 @@ def _send_notification(assessment: Assessment) -> None:
 
     scores_block = "\n".join(score_lines) or "  No scores recorded."
 
-    body = textwrap.dedent("""
+    body = (
+        textwrap.dedent("""
         AI Assessment Complete
 
         Application ID : {}
@@ -218,21 +217,24 @@ def _send_notification(assessment: Assessment) -> None:
 
         Assessed at {} by AI (claude-sonnet-4-6).
         View application: /assessor/application/{}
-    """).strip().format(
-        application.id,
-        org_name,
-        grant_name,
-        application.submitted_at,
-        assessment.weighted_total,
-        recommendation,
-        scores_block,
-        gap_analysis,
-        assessment.completed_at,
-        application.id,
+    """)
+        .strip()
+        .format(
+            application.id,
+            org_name,
+            grant_name,
+            application.submitted_at,
+            assessment.weighted_total,
+            recommendation,
+            scores_block,
+            gap_analysis,
+            assessment.completed_at,
+            application.id,
+        )
     )
 
     msg = MIMEText(body, "plain", "utf-8")
-    msg["Subject"] = "[{}] AI Assessment: {} -- {}".format(recommendation, org_name, grant_name)
+    msg["Subject"] = f"[{recommendation}] AI Assessment: {org_name} -- {grant_name}"
     msg["From"] = smtp_from
     msg["To"] = recipient
 
@@ -280,9 +282,7 @@ def assess_application(application_id: int) -> Assessment | None:
 
     criteria: list[dict] = application.grant.config_json.get("criteria", [])
     if not criteria:
-        log.warning(
-            "assess_application: grant %s has no criteria", application.grant.slug
-        )
+        log.warning("assess_application: grant %s has no criteria", application.grant.slug)
         return None
 
     ai_user = _get_or_create_ai_user()
@@ -293,6 +293,7 @@ def assess_application(application_id: int) -> Assessment | None:
         # Try loading .env from the project root in case Flask didn't pick it up
         try:
             from dotenv import load_dotenv
+
             load_dotenv()
             api_key = os.environ.get("ANTHROPIC_API_KEY")
         except ImportError:
@@ -323,18 +324,14 @@ def assess_application(application_id: int) -> Assessment | None:
     try:
         parsed = _parse_response(raw)
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
-        log.error(
-            "assess_application: failed to parse Claude response: %s\n%s", exc, raw
-        )
+        log.error("assess_application: failed to parse Claude response: %s\n%s", exc, raw)
         return None
 
     raw_scores = parsed.get("scores") if isinstance(parsed.get("scores"), dict) else {}
     scores = _coerce_scores(raw_scores, criteria)
     raw_notes = parsed.get("notes") if isinstance(parsed.get("notes"), dict) else {}
     valid_ids = {c["id"] for c in criteria}
-    notes: dict[str, str] = {
-        cid: str(raw_notes.get(cid, "")) for cid in valid_ids
-    }
+    notes: dict[str, str] = {cid: str(raw_notes.get(cid, "")) for cid in valid_ids}
     gap_analysis: str = parsed.get("gap_analysis", "")
     raw_recommendation: str = parsed.get("recommendation", "refer")
 

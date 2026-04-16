@@ -30,10 +30,9 @@ class Config:
     # Companies House, etc.). Defaults on in production so new grants can
     # opt into validators purely via their form schema. Flip off for
     # offline / airgapped runs.
-    EXTERNAL_VALIDATORS_ENABLED: bool = (
-        os.environ.get("EXTERNAL_VALIDATORS_ENABLED", "1").lower()
-        not in ("0", "false", "no")
-    )
+    EXTERNAL_VALIDATORS_ENABLED: bool = os.environ.get(
+        "EXTERNAL_VALIDATORS_ENABLED", "1"
+    ).lower() not in ("0", "false", "no")
     # Companies House API key — optional. When unset the Companies House
     # validator reports itself as "skipped" and the FindThatCharity
     # aggregator is the sole fall-back.

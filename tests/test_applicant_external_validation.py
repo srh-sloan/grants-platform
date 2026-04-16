@@ -98,15 +98,9 @@ def _restore_find_that_charity_validator():
 def stub_charity_hit():
     """Register a FindThatCharity validator whose fetcher returns a known hit."""
     fetcher = _FakeFetcher(
-        {
-            "https://ftc.test/charity/1234567.json": {
-                "name": "Shelter Bristol Trust"
-            }
-        }
+        {"https://ftc.test/charity/1234567.json": {"name": "Shelter Bristol Trust"}}
     )
-    register_validator(
-        FindThatCharityValidator(fetcher=fetcher, base_url="https://ftc.test")
-    )
+    register_validator(FindThatCharityValidator(fetcher=fetcher, base_url="https://ftc.test"))
 
 
 @pytest.fixture
@@ -128,17 +122,11 @@ def stub_charity_network_error():
 
     fetcher = _FakeFetcher(
         {
-            "https://ftc.test/charity/1234567.json": ExternalValidatorError(
-                "HTTP 503"
-            ),
-            "https://ftc.test/company/1234567.json": ExternalValidatorError(
-                "HTTP 503"
-            ),
+            "https://ftc.test/charity/1234567.json": ExternalValidatorError("HTTP 503"),
+            "https://ftc.test/company/1234567.json": ExternalValidatorError("HTTP 503"),
         }
     )
-    register_validator(
-        FindThatCharityValidator(fetcher=fetcher, base_url="https://ftc.test")
-    )
+    register_validator(FindThatCharityValidator(fetcher=fetcher, base_url="https://ftc.test"))
 
 
 # ---------------------------------------------------------------------------

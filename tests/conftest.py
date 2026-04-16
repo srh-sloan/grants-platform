@@ -50,7 +50,13 @@ def seeded_grant(db):
             "slug": "ehcf",
             "summary": "Test summary",
             "criteria": [
-                {"id": "skills", "label": "Skills", "weight": 100, "max": 3, "auto_reject_on_zero": True}
+                {
+                    "id": "skills",
+                    "label": "Skills",
+                    "weight": 100,
+                    "max": 3,
+                    "auto_reject_on_zero": True,
+                }
             ],
         },
     )

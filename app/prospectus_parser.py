@@ -328,9 +328,7 @@ def generate_grant_artifacts(
             messages=[
                 {
                     "role": "user",
-                    "content": _GRANT_CONFIG_PROMPT.format(
-                        prospectus_text=prospectus_text
-                    ),
+                    "content": _GRANT_CONFIG_PROMPT.format(prospectus_text=prospectus_text),
                 }
             ],
         )
@@ -371,7 +369,9 @@ def generate_grant_artifacts(
             )
             schema_raw = _strip_fences(resp2.content[0].text)
             application_schema = json.loads(schema_raw)
-            log.info("Application schema generated (%d pages)", len(application_schema.get("pages", [])))
+            log.info(
+                "Application schema generated (%d pages)", len(application_schema.get("pages", []))
+            )
         except json.JSONDecodeError as exc:
             errors.append(
                 f"Form schema JSON parse error: {exc}. "

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import types
 
-import pytest
 from flask import render_template
 
 
@@ -52,7 +51,9 @@ def test_text_field_renders_label(app):
     page = {
         "id": "p1",
         "title": "Test page",
-        "fields": [{"id": "org_name", "type": "text", "label": "Organisation name", "required": True}],
+        "fields": [
+            {"id": "org_name", "type": "text", "label": "Organisation name", "required": True}
+        ],
     }
     html = _render(app, page)
     assert "Organisation name" in html

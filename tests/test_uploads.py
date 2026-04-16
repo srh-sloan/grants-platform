@@ -140,7 +140,9 @@ class TestServeDocument:
         assert resp.status_code == 200
         assert resp.data == b"secret data"
 
-    def test_applicant_cannot_access_others(self, app, client, applicant_user, submitted_application):
+    def test_applicant_cannot_access_others(
+        self, app, client, applicant_user, submitted_application
+    ):
         """An applicant from a different org gets 403."""
         with app.app_context():
             doc = save_upload(submitted_application, "budget", _make_file())
@@ -176,7 +178,9 @@ class TestServeDocument:
         resp = client.get(f"/uploads/{doc_id}")
         assert resp.status_code == 200
 
-    def test_assessor_cannot_access_draft(self, app, client, assessor_user, seeded_grant, applicant_user):
+    def test_assessor_cannot_access_draft(
+        self, app, client, assessor_user, seeded_grant, applicant_user
+    ):
         """Assessors should not see documents on draft applications."""
         with app.app_context():
             draft_app = Application(

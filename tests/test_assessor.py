@@ -406,9 +406,7 @@ def test_detail_back_link_defaults_to_queue(client, assessor, submitted_app, ass
     assert b"Back to allocation dashboard" not in resp.data
 
 
-def test_detail_back_link_follows_return_to_allocation(
-    client, assessor, submitted_app, assessment
-):
+def test_detail_back_link_follows_return_to_allocation(client, assessor, submitted_app, assessment):
     """return_to=allocation switches the back-link to the allocation dashboard."""
     _login(client)
     resp = client.get(f"/assess/{submitted_app.id}?return_to=allocation")
@@ -417,9 +415,7 @@ def test_detail_back_link_follows_return_to_allocation(
     assert b"Back to queue" not in resp.data
 
 
-def test_detail_back_link_ignores_unknown_return_to(
-    client, assessor, submitted_app, assessment
-):
+def test_detail_back_link_ignores_unknown_return_to(client, assessor, submitted_app, assessment):
     """An unrecognised return_to value falls back to the queue link."""
     _login(client)
     resp = client.get(f"/assess/{submitted_app.id}?return_to=../evil")
@@ -448,9 +444,7 @@ def test_detail_return_to_preserved_across_post_redirect(
     assert "return_to=allocation" in resp.headers["Location"]
 
 
-def test_allocation_review_link_threads_return_to(
-    client, assessor, submitted_app, assessment
-):
+def test_allocation_review_link_threads_return_to(client, assessor, submitted_app, assessment):
     """The allocation dashboard Review link carries return_to=allocation."""
     _login(client)
     # Give the assessment a weighted_total so the allocation query returns it.
@@ -505,6 +499,7 @@ def test_monitoring_generate_stores_plan(client, assessor, submitted_app, assess
 
     # Mock the AI call at the module level in assessor
     from unittest.mock import patch
+
     with patch("app.assessor._call_claude_for_monitoring", return_value=fake_plan):
         resp = client.post(
             f"/assess/{submitted_app.id}/monitoring",

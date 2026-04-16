@@ -209,9 +209,7 @@ _APPLICATIONS = [
 
 def seed_demo_applications() -> None:
     """Upsert demo applications for the EHCF grant."""
-    grant = db.session.execute(
-        select(Grant).where(Grant.slug == "ehcf")
-    ).scalar_one_or_none()
+    grant = db.session.execute(select(Grant).where(Grant.slug == "ehcf")).scalar_one_or_none()
 
     if grant is None:
         print("ERROR: ehcf grant not found. Run seed.py first.")
@@ -246,9 +244,7 @@ def seed_demo_applications() -> None:
 
         # Create applicant user
         user_email = spec["user_email"]
-        user = db.session.execute(
-            select(User).where(User.email == user_email)
-        ).scalar_one_or_none()
+        user = db.session.execute(select(User).where(User.email == user_email)).scalar_one_or_none()
         if user is None:
             db.session.flush()
             user = User(

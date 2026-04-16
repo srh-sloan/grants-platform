@@ -52,7 +52,6 @@ from app.models import (
     ApplicationStatus,
     Assessment,
     AssessmentRecommendation,
-    Organisation,
     User,
     UserRole,
 )
@@ -111,8 +110,11 @@ class CreateAssessorForm(FlaskForm):
         description="Must be at least 10 characters.",
         validators=[
             InputRequired(message="Enter a password"),
-            Length(min=_PASSWORD_MIN_LENGTH, max=128,
-                   message=f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"),
+            Length(
+                min=_PASSWORD_MIN_LENGTH,
+                max=128,
+                message=f"Password must be at least {_PASSWORD_MIN_LENGTH} characters",
+            ),
         ],
     )
     confirm_password = PasswordField(
@@ -129,9 +131,7 @@ class CreateAssessorForm(FlaskForm):
         email = (field.data or "").strip().lower()
         if not email:
             return
-        existing = db.session.execute(
-            select(User).where(User.email == email)
-        ).scalar_one_or_none()
+        existing = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
         if existing is not None:
             raise ValidationError("An account with this email already exists")
 
@@ -197,9 +197,7 @@ class EditUserForm(FlaskForm):
         if not value:
             return
         if len(value) < _PASSWORD_MIN_LENGTH:
-            raise ValidationError(
-                f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"
-            )
+            raise ValidationError(f"Password must be at least {_PASSWORD_MIN_LENGTH} characters")
         if len(value) > 128:
             raise ValidationError("Password must be 128 characters or fewer")
 
@@ -253,6 +251,7 @@ def _get_or_create_assessment(application: Application) -> Assessment:
     assessment = Assessment.query.filter_by(application_id=application.id).first()
     if assessment is None:
         from app.assessor_ai import _get_or_create_ai_user
+
         ai_user = _get_or_create_ai_user()
         assessment = Assessment(
             application_id=application.id,
@@ -289,7 +288,8 @@ def _notify_applicant(
         AssessmentRecommendation.REFER: "REFERRED FOR FURTHER REVIEW",
     }.get(recommendation, recommendation.value.upper())
 
-    body = textwrap.dedent("""
+    body = (
+        textwrap.dedent("""
         Dear {org_name},
 
         Thank you for your application to the {grant_name}.
@@ -305,23 +305,25 @@ def _notify_applicant(
 
         Yours sincerely,
         The {grant_name} Assessment Team
-    """).strip().format(
-        org_name=org.name,
-        grant_name=application.grant.name,
-        rec_label=rec_label,
-        notes_section=(
-            "Additional information from the assessment panel:\n\n    " + decision_notes
-            if decision_notes else ""
-        ),
-        contact_email=application.grant.config_json.get(
-            "contact_email", "grants@communities.gov.uk"
-        ),
+    """)
+        .strip()
+        .format(
+            org_name=org.name,
+            grant_name=application.grant.name,
+            rec_label=rec_label,
+            notes_section=(
+                "Additional information from the assessment panel:\n\n    " + decision_notes
+                if decision_notes
+                else ""
+            ),
+            contact_email=application.grant.config_json.get(
+                "contact_email", "grants@communities.gov.uk"
+            ),
+        )
     )
 
     msg = MIMEText(body, "plain", "utf-8")
-    msg["Subject"] = "[{}] Your {} application outcome".format(
-        rec_label, application.grant.name
-    )
+    msg["Subject"] = f"[{rec_label}] Your {application.grant.name} application outcome"
     msg["From"] = smtp_from
     msg["To"] = recipient
 
@@ -367,7 +369,8 @@ def queue():
         rows = [(a, s) for a, s in rows if a.status.value == status_filter]
     if rec_filter:
         rows = [
-            (a, s) for a, s in rows
+            (a, s)
+            for a, s in rows
             if s and s.recommendation and s.recommendation.value == rec_filter
         ]
 
@@ -486,8 +489,7 @@ def save_score(app_id: int):
     assessment.scores_json = {**scores, **preserved_scores}
     # Preserve internal metadata — only carry forward non-empty values
     preserved_notes: dict = {}
-    for key in ("_eligibility_notes", "_declaration_notes", "_gap_analysis",
-                "_decision_notes"):
+    for key in ("_eligibility_notes", "_declaration_notes", "_gap_analysis", "_decision_notes"):
         val = old_notes.get(key)
         if val:
             preserved_notes[key] = val
@@ -688,6 +690,7 @@ def _call_claude_for_monitoring(prompt: str) -> dict | None:
     if not api_key:
         try:
             from dotenv import load_dotenv
+
             load_dotenv()
             api_key = os.environ.get("ANTHROPIC_API_KEY")
         except ImportError:
@@ -718,10 +721,12 @@ def _build_monitoring_prompt(application: Application) -> str:
     org_name = org.name if org else "Unknown"
 
     answers = application.answers_json or {}
-    answers_block = "\n".join(
-        f"  {key}: {json.dumps(value, ensure_ascii=False)}"
-        for key, value in answers.items()
-    ) or "  (no answers provided)"
+    answers_block = (
+        "\n".join(
+            f"  {key}: {json.dumps(value, ensure_ascii=False)}" for key, value in answers.items()
+        )
+        or "  (no answers provided)"
+    )
 
     # Build scores block from the assessment
     assessment = Assessment.query.filter_by(application_id=application.id).first()
@@ -736,15 +741,11 @@ def _build_monitoring_prompt(application: Application) -> str:
     funding_parts = []
     if award_ranges.get("revenue_min") and award_ranges.get("revenue_max"):
         funding_parts.append(
-            "Revenue: {}-{}/year".format(
-                award_ranges["revenue_min"], award_ranges["revenue_max"]
-            )
+            "Revenue: {}-{}/year".format(award_ranges["revenue_min"], award_ranges["revenue_max"])
         )
     if award_ranges.get("capital_min") and award_ranges.get("capital_max"):
         funding_parts.append(
-            "Capital: {}-{}".format(
-                award_ranges["capital_min"], award_ranges["capital_max"]
-            )
+            "Capital: {}-{}".format(award_ranges["capital_min"], award_ranges["capital_max"])
         )
     funding_info = "; ".join(funding_parts) or "Not specified"
 
@@ -759,9 +760,9 @@ def _build_monitoring_prompt(application: Application) -> str:
 
     # JSON example kept as a plain string to avoid f-string brace escaping
     json_example = (
-        '{\n'
+        "{\n"
         '  "kpis": [\n'
-        '    {\n'
+        "    {\n"
         '      "name": "KPI name",\n'
         '      "definition": "What this measures",\n'
         '      "target": "Target value or description",\n'
@@ -769,18 +770,18 @@ def _build_monitoring_prompt(application: Application) -> str:
         '      "evidence_source": "How it will be measured",\n'
         '      "reporting_frequency": "quarterly|annually|six-monthly",\n'
         '      "owner": "Who reports on this"\n'
-        '    }\n'
-        '  ],\n'
+        "    }\n"
+        "  ],\n"
         '  "milestones": [\n'
-        '    {\n'
+        "    {\n"
         '      "period": "Month 1-3",\n'
         '      "description": "What should be achieved",\n'
         '      "evidence_required": "What evidence to collect"\n'
-        '    }\n'
-        '  ],\n'
+        "    }\n"
+        "  ],\n"
         '  "risk_review_points": ["Month 6", "Month 12", "Month 24"],\n'
         '  "summary": "Brief monitoring plan narrative"\n'
-        '}'
+        "}"
     )
 
     return (
@@ -856,7 +857,7 @@ def generate_monitoring(app_id: int):
 @bp.post("/<int:app_id>/run-ai")
 @assessor_required
 def trigger_ai(app_id: int):
-    application = _get_application_or_404(app_id)
+    _get_application_or_404(app_id)  # 404 side-effect; row not needed here
     form = _CsrfForm()
     if not form.validate_on_submit():
         abort(400)
@@ -867,9 +868,13 @@ def trigger_ai(app_id: int):
         return _redirect_to_detail(app_id)
 
     from app.assessor_ai import assess_application
+
     assessment = assess_application(app_id)
     if assessment is None:
-        flash("AI assessment failed -- check ANTHROPIC_API_KEY is set and the application has answers.", "error")
+        flash(
+            "AI assessment failed -- check ANTHROPIC_API_KEY is set and the application has answers.",
+            "error",
+        )
     else:
         flash("AI assessment complete.", "success")
     return _redirect_to_detail(app_id)
@@ -912,11 +917,15 @@ def allocation():
 @assessor_required
 def list_users():
     _admin_required()
-    users = db.session.execute(
-        select(User).where(
-            User.role.in_([UserRole.ASSESSOR, UserRole.ADMIN])
-        ).order_by(User.role, User.email)
-    ).scalars().all()
+    users = (
+        db.session.execute(
+            select(User)
+            .where(User.role.in_([UserRole.ASSESSOR, UserRole.ADMIN]))
+            .order_by(User.role, User.email)
+        )
+        .scalars()
+        .all()
+    )
     form = _CsrfForm()
     return render_template("assessor/users.html", users=users, form=form)
 
@@ -935,7 +944,7 @@ def create_user():
         )
         db.session.add(user)
         db.session.commit()
-        flash("Account created for {}.".format(email), "success")
+        flash(f"Account created for {email}.", "success")
         return redirect(url_for("assessor.list_users"))
     return render_template("assessor/create_user.html", form=form)
 

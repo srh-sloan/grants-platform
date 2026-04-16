@@ -155,7 +155,9 @@ def publish_grant(grant_id: int):
     if not criteria:
         errors.append("Grant has no scoring criteria — add at least one before publishing.")
     elif sum(c.get("weight", 0) for c in criteria) != 100:
-        errors.append("Criterion weights do not sum to 100 — fix the grant config before publishing.")
+        errors.append(
+            "Criterion weights do not sum to 100 — fix the grant config before publishing."
+        )
     if not eligibility:
         errors.append("Grant has no eligibility rules defined.")
     if app_form is None:

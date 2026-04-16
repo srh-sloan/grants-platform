@@ -43,8 +43,20 @@ def grant(db):
         config_json={
             "slug": "ehcf-test",
             "criteria": [
-                {"id": "skills", "label": "Skills", "weight": 50, "max": 3, "auto_reject_on_zero": True},
-                {"id": "proposal", "label": "Proposal", "weight": 50, "max": 3, "auto_reject_on_zero": True},
+                {
+                    "id": "skills",
+                    "label": "Skills",
+                    "weight": 50,
+                    "max": 3,
+                    "auto_reject_on_zero": True,
+                },
+                {
+                    "id": "proposal",
+                    "label": "Proposal",
+                    "weight": 50,
+                    "max": 3,
+                    "auto_reject_on_zero": True,
+                },
             ],
         },
     )
@@ -86,12 +98,14 @@ def submitted_application(db, grant, org):
 
 def _mock_claude_response(scores: dict, notes: dict, gap: str, recommendation: str) -> MagicMock:
     """Build a mock Anthropic Message that returns valid JSON."""
-    payload = json.dumps({
-        "scores": scores,
-        "notes": notes,
-        "gap_analysis": gap,
-        "recommendation": recommendation,
-    })
+    payload = json.dumps(
+        {
+            "scores": scores,
+            "notes": notes,
+            "gap_analysis": gap,
+            "recommendation": recommendation,
+        }
+    )
     message = MagicMock()
     message.content = [MagicMock(text=payload)]
     return message
@@ -112,13 +126,16 @@ def test_assess_application_creates_assessment(app, submitted_application):
     )
 
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
 
             from app.assessor_ai import assess_application
+
             result = assess_application(submitted_application.id)
 
         assert result is not None
@@ -141,13 +158,16 @@ def test_assess_application_is_idempotent(app, submitted_application):
     )
 
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
 
             from app.assessor_ai import assess_application
+
             first = assess_application(submitted_application.id)
             second = assess_application(submitted_application.id)
 
@@ -161,6 +181,7 @@ def test_assess_application_returns_none_for_missing_app(app):
     with app.app_context():
         with patch("anthropic.Anthropic"):
             from app.assessor_ai import assess_application
+
             result = assess_application(99999)
         assert result is None
 
@@ -171,20 +192,21 @@ def test_assess_application_handles_bad_json(app, submitted_application):
     message.content = [MagicMock(text="Sorry, I cannot score this application.")]
 
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = message
 
             from app.assessor_ai import assess_application
+
             result = assess_application(submitted_application.id)
 
         assert result is None
         # Confirm no Assessment row was committed
-        assessment = Assessment.query.filter_by(
-            application_id=submitted_application.id
-        ).first()
+        assessment = Assessment.query.filter_by(application_id=submitted_application.id).first()
         assert assessment is None
 
 
@@ -198,13 +220,16 @@ def test_assess_application_auto_reject_on_zero(app, submitted_application):
     )
 
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
 
             from app.assessor_ai import assess_application
+
             result = assess_application(submitted_application.id)
 
         assert result is not None
@@ -228,14 +253,17 @@ def test_assess_application_upserts_ai_user(app, submitted_application):
         ai_user = User.query.filter_by(email="ai-assessor@system.local").first()
         assert ai_user is None
 
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = mock_response
 
             from app.assessor_ai import assess_application
-            result = assess_application(submitted_application.id)
+
+            assess_application(submitted_application.id)
 
         ai_user = User.query.filter_by(email="ai-assessor@system.local").first()
         assert ai_user is not None
@@ -245,23 +273,28 @@ def test_assess_application_upserts_ai_user(app, submitted_application):
 
 def test_assess_application_strips_markdown_fences(app, submitted_application):
     """Handles Claude wrapping output in code fences (```json ... ```)."""
-    payload = json.dumps({
-        "scores": {"skills": 2, "proposal": 2},
-        "notes": {"skills": "Fine.", "proposal": "Fine."},
-        "gap_analysis": "Adequate.",
-        "recommendation": "fund",
-    })
+    payload = json.dumps(
+        {
+            "scores": {"skills": 2, "proposal": 2},
+            "notes": {"skills": "Fine.", "proposal": "Fine."},
+            "gap_analysis": "Adequate.",
+            "recommendation": "fund",
+        }
+    )
     message = MagicMock()
     message.content = [MagicMock(text="```json\n" + payload + "\n```")]
 
     with app.app_context():
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
-             patch("anthropic.Anthropic") as mock_anthropic_cls:
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            patch("anthropic.Anthropic") as mock_anthropic_cls,
+        ):
             mock_client = MagicMock()
             mock_anthropic_cls.return_value = mock_client
             mock_client.messages.create.return_value = message
 
             from app.assessor_ai import assess_application
+
             result = assess_application(submitted_application.id)
 
         assert result is not None
@@ -292,6 +325,7 @@ def test_assess_application_no_criteria(app, db, org):
     with app.app_context():
         with patch("anthropic.Anthropic"):
             from app.assessor_ai import assess_application
+
             result = assess_application(application.id)
 
         assert result is None
