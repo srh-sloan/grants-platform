@@ -103,3 +103,9 @@ The SQLite file lives at `./grants.db` by default.
 - `refs/ehcf-prospectus.md` — the first grant we're modelling
 - `refs/pride-in-place-prospectus.md` — a second grant, to stress-test flexibility
 - `CLAUDE.md` — fuller architectural notes (may drift ahead of what's built; the README is the source of truth for what's actually agreed)
+
+## Hackathon resources
+
+- [Hackathon repo](https://github.com/Version1/ai-engineering-lab-hackathon-london-2026)
+- [Hackathon README](https://github.com/Version1/ai-engineering-lab-hackathon-london-2026/blob/main/README.md)
+- [Open brief](https://github.com/Version1/ai-engineering-lab-hackathon-london-2026/blob/main/open-brief.md)
