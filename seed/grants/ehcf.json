@@ -38,13 +38,118 @@
     }
   ],
   "criteria": [
-    {"id": "skills", "label": "Skills and experience", "weight": 10, "max": 3, "auto_reject_on_zero": true},
-    {"id": "proposal1", "label": "Proposal Part 1 — challenge identification with local evidence", "weight": 10, "max": 3, "auto_reject_on_zero": true},
-    {"id": "proposal2", "label": "Proposal Part 2 — project alignment to fund objectives", "weight": 30, "max": 3, "auto_reject_on_zero": true},
-    {"id": "deliverability1", "label": "Deliverability Part 1 — milestones, planning, governance", "weight": 25, "max": 3, "auto_reject_on_zero": true},
-    {"id": "deliverability2", "label": "Deliverability Part 2 — risk identification and mitigation", "weight": 5, "max": 3, "auto_reject_on_zero": true},
-    {"id": "cost_value", "label": "Cost and value — itemised budget, value for money", "weight": 10, "max": 3, "auto_reject_on_zero": true},
-    {"id": "outcomes", "label": "Outcomes and impact — measurable results, system strengthening", "weight": 10, "max": 3, "auto_reject_on_zero": true}
+    {
+      "id": "skills",
+      "label": "Skills and experience",
+      "weight": 10,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "Evidence that the organisation has the right people, expertise and track record to deliver the project. This includes relevant staff qualifications, lived experience of homelessness in the team, and a demonstrable history of delivering similar services.",
+        "scores": {
+          "0": "No evidence of relevant skills, experience or track record in homelessness services. Application does not demonstrate organisational capacity to deliver.",
+          "1": "Some evidence of relevant experience but significant gaps. Track record is limited, partial or not clearly linked to the proposed project.",
+          "2": "Clear evidence of relevant skills and a credible track record in homelessness or related services. Key staff are identified with appropriate experience.",
+          "3": "Exceptional evidence of sector-leading expertise. Demonstrates strong lived experience representation, a well-established track record, and specific skills directly matched to the project's requirements."
+        }
+      }
+    },
+    {
+      "id": "proposal1",
+      "label": "Proposal Part 1 — challenge identification with local evidence",
+      "weight": 10,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "A clear and evidence-based description of the local homelessness challenge the project will address. Should reference local data (e.g. rough sleeping counts, local authority statistics, CHAIN data) and demonstrate understanding of the specific needs of people experiencing homelessness in the area.",
+        "scores": {
+          "0": "No local evidence provided. Challenge is described in generic terms with no reference to the specific local context or data.",
+          "1": "Some local context is referenced but the evidence is weak, out of date, or not directly linked to the proposed project.",
+          "2": "Credible local evidence is presented. The challenge is clearly defined with relevant data and a clear link to the proposed intervention.",
+          "3": "Compelling, data-rich analysis of the local challenge. Uses multiple evidence sources (statutory data, lived experience, community insight) and clearly situates the project within the local homelessness system."
+        }
+      }
+    },
+    {
+      "id": "proposal2",
+      "label": "Proposal Part 2 — project alignment to fund objectives",
+      "weight": 30,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "The project must clearly align to at least one of the three EHCF fund objectives: (1) community-based support, (2) day services enhancement, or (3) recovery support. The application should explain how the project contributes to reducing rough sleeping and improving outcomes for people experiencing homelessness.",
+        "scores": {
+          "0": "The project does not align to any EHCF fund objective, or the alignment is not explained.",
+          "1": "A fund objective is referenced but the alignment is superficial. The project activities are not clearly linked to the stated objective.",
+          "2": "Clear alignment to one or more fund objectives. The project activities logically contribute to the objective and the connection is well-explained.",
+          "3": "Exemplary alignment. The project is designed around EHCF objectives with activities directly mapped to expected fund outcomes. Demonstrates understanding of how the project fits within the wider MHCLG homelessness strategy."
+        }
+      }
+    },
+    {
+      "id": "deliverability1",
+      "label": "Deliverability Part 1 — milestones, planning, governance",
+      "weight": 25,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "A realistic and detailed delivery plan including a project timeline, key milestones, staffing plan, and governance arrangements. The application should demonstrate that the organisation has the infrastructure and management capacity to deliver the project over 3 years.",
+        "scores": {
+          "0": "No delivery plan, timeline or governance structure provided. It is not credible that the organisation could manage the project.",
+          "1": "A high-level plan exists but lacks detail on milestones, staffing or governance. Significant risks to delivery are not addressed.",
+          "2": "A credible delivery plan with a clear timeline, identified milestones, named staff and appropriate governance. Minor gaps or risks are present but manageable.",
+          "3": "An exceptionally detailed and realistic delivery plan. Milestones are SMART, governance is robust, contingencies are identified, and the plan demonstrates experience of managing projects of this scale."
+        }
+      }
+    },
+    {
+      "id": "deliverability2",
+      "label": "Deliverability Part 2 — risk identification and mitigation",
+      "weight": 5,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "The application should identify the main risks to project delivery and explain how each will be managed or mitigated. Risks should include financial, operational and safeguarding risks.",
+        "scores": {
+          "0": "No risks are identified, or risks are acknowledged without any mitigation plan.",
+          "1": "Some risks are identified but the analysis is incomplete. Mitigations are vague or unconvincing.",
+          "2": "Key risks are identified with plausible mitigation strategies. The organisation demonstrates awareness of the main threats to delivery.",
+          "3": "Comprehensive risk register with well-developed mitigations. Demonstrates sector knowledge (e.g. risks specific to working with people experiencing homelessness, safeguarding, data sharing) and proactive risk management."
+        }
+      }
+    },
+    {
+      "id": "cost_value",
+      "label": "Cost and value — itemised budget, value for money",
+      "weight": 10,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "An itemised budget that is realistic, justified and represents value for money. Staff costs should be broken down by role and time allocation. Overhead costs should be proportionate. The cost per person supported or per outcome should be reasonable given the local context.",
+        "scores": {
+          "0": "Budget is missing, not itemised, or clearly disproportionate to the activities described.",
+          "1": "A budget is provided but significant costs are unexplained, inflated or do not match the delivery plan.",
+          "2": "A clear, itemised budget with most costs adequately justified. Value for money is broadly demonstrated.",
+          "3": "Exemplary budget narrative. Every cost is justified, value for money is explicitly demonstrated (e.g. cost per person supported), and the budget reflects a realistic understanding of the cost of delivering homelessness services."
+        }
+      }
+    },
+    {
+      "id": "outcomes",
+      "label": "Outcomes and impact — measurable results, system strengthening",
+      "weight": 10,
+      "max": 3,
+      "auto_reject_on_zero": true,
+      "guidance": {
+        "what_we_look_for": "The project should have clear, measurable outcomes for people experiencing homelessness and for the local system. Outcomes should include both individual-level outcomes (e.g. reduced rough sleeping, improved wellbeing, move-on to settled accommodation) and system-level outcomes (e.g. improved partnership working, shared data, reduced repeat homelessness). The application should describe how outcomes will be measured.",
+        "scores": {
+          "0": "No measurable outcomes are defined, or outcomes are purely activity-based (e.g. number of sessions delivered) rather than impact-focused.",
+          "1": "Some outcomes are stated but they are vague, unmeasurable or not linked to the project activities.",
+          "2": "Clear outcomes with appropriate metrics. The application explains how outcomes will be measured and monitored.",
+          "3": "Ambitious, specific and measurable outcomes at both individual and system level. Demonstrates understanding of the MHCLG outcomes framework and includes a credible approach to data collection, evaluation and learning."
+        }
+      }
+    }
   ],
   "award_ranges": {
     "revenue_min": 50000,

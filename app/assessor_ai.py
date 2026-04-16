@@ -82,32 +82,41 @@ def _build_prompt(application: Application, criteria: list[dict]) -> str:
         for key, value in answers.items()
     ) or "  (no answers provided)"
 
-    criteria_block = "\n".join(
-        "  - id={!r}, label={!r}, max={}, weight={}{}".format(
+    criteria_parts = []
+    for c in criteria:
+        header = "  - id={!r}, label={!r}, max={}, weight={}{}".format(
             c["id"],
             c["label"],
             c["max"],
             c["weight"],
             " [AUTO-REJECT if zero]" if c.get("auto_reject_on_zero") else "",
         )
-        for c in criteria
-    )
+        guidance = c.get("guidance", {})
+        what = guidance.get("what_we_look_for", "")
+        score_descs = guidance.get("scores", {})
+        rubric_lines = []
+        if what:
+            rubric_lines.append("    What we look for: " + what)
+        for score_val in sorted(score_descs.keys(), key=lambda x: int(x)):
+            rubric_lines.append("    Score {}: {}".format(score_val, score_descs[score_val]))
+        criteria_parts.append(header + ("\n" + "\n".join(rubric_lines) if rubric_lines else ""))
+    criteria_block = "\n".join(criteria_parts)
 
     return (
         "You are an expert grant assessor for the {} programme.\n\n"
         "## Application answers\n{}\n\n"
         "## Scoring criteria\n"
-        "Score each criterion from 0 to its stated max. Return ONLY valid JSON with no prose outside it.\n\n"
+        "Score each criterion from 0 to its stated max using the rubric below. "
+        "Return ONLY valid JSON with no prose outside it.\n\n"
         "{}\n\n"
         "## Required JSON output (strictly this shape)\n"
         "{{\n"
         '  "scores": {{"<criterion_id>": <int>, ...}},\n'
-        '  "notes": {{"<criterion_id>": "<rationale string>", ...}},\n'
+        '  "notes": {{"<criterion_id>": "<rationale string citing specific evidence from the application>", ...}},\n'
         '  "gap_analysis": "<brief overall narrative of strengths and gaps>",\n'
         '  "recommendation": "fund" | "reject" | "refer"\n'
         "}}\n\n"
-        "Scoring guide (adjust if max != 3): 0 = does not meet threshold, 1 = partially meets, "
-        "2 = meets, 3 = exceeds.\n"
+        "Apply the per-criterion rubric strictly. "
         "Auto-reject criteria must score > 0 unless the evidence is genuinely absent.\n"
         "Base the recommendation on the weighted total relative to max and any auto-reject flags."
     ).format(application.grant.name, answers_block, criteria_block)
