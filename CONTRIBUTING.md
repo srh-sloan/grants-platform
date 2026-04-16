@@ -45,6 +45,7 @@ from app.forms_runner import (
     list_pages, get_page, next_page_id, prev_page_id,
     validate_page, merge_page_answers,
     evaluate_eligibility, EligibilityResult,
+    format_answer,       # type-aware value formatter for summary display
     SUPPORTED_FIELD_TYPES,
 )
 ```

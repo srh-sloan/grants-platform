@@ -15,19 +15,52 @@
 #}
 {% from 'govuk_frontend_jinja/components/summary-list/macro.html' import govukSummaryList %}
 
+{#
+  display_value(field, value) — type-aware formatter for summary display.
+
+  Mirrors the logic in forms_runner.format_answer so templates render
+  human-readable labels without importing Python helpers directly.
+#}
+{% macro display_value(field, value) -%}
+  {%- if value is none or value == "" -%}
+    Not answered
+  {%- elif field.type == "currency" -%}
+    {%- set int_val = value | string | float | int -%}
+    £{{ "{:,}".format(int_val) }}
+  {%- elif field.type == "checkbox" -%}
+    {{ "Yes" if value else "No" }}
+  {%- elif field.type in ("radio", "select") -%}
+    {%- set found = namespace(label=value | string) -%}
+    {%- for opt in field.options | default([]) -%}
+      {%- if opt.value == value -%}
+        {%- set found.label = opt.label -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ found.label }}
+  {%- elif field.type == "number" -%}
+    {%- set fval = value | string | float -%}
+    {%- if fval == fval | int -%}
+      {{ fval | int }}
+    {%- else -%}
+      {{ fval }}
+    {%- endif -%}
+  {%- else -%}
+    {{ value }}
+  {%- endif -%}
+{%- endmacro %}
+
 <div data-testid="answers-summary">
   {% for page in schema.pages %}
     <h2 class="govuk-heading-l">{{ page.title }}</h2>
     {% set page_answers = answers.get(page.id) or {} %}
-    {{ govukSummaryList({
-      "rows": [
-        {
-          "key": {"text": field.label},
-          "value": {"text": page_answers.get(field.id) | default("Not answered", true)}
-        }
-        for field in page.fields
-      ]
-    }) }}
+    {% set rows = [] %}
+    {% for field in page.fields %}
+      {% set _ = rows.append({
+        "key": {"text": field.label},
+        "value": {"text": display_value(field, page_answers.get(field.id))}
+      }) %}
+    {% endfor %}
+    {{ govukSummaryList({"rows": rows}) }}
   {% endfor %}
 
   <h2 class="govuk-heading-l">Supporting documents</h2>
