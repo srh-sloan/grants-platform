@@ -47,3 +47,16 @@
 .app-grant-list__item:last-child {
   padding-bottom: 10px;
 }
+
+/* Flash-message banners sit between the phase banner's bottom border and the
+   main content. GOV.UK's notification-banner has no top margin (so it hugs
+   the phase banner's HR) and a 50px bottom margin that stacks with the main
+   wrapper's 30px top padding. Give it breathing room above and tighten below
+   so the banner sits comfortably between the two. */
+.app-flash-banners {
+  margin-top: 20px;
+}
+
+.app-flash-banners .govuk-notification-banner {
+  margin-bottom: 10px;
+}
