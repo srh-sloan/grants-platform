@@ -99,7 +99,7 @@ def stub_charity_hit():
     """Register a FindThatCharity validator whose fetcher returns a known hit."""
     fetcher = _FakeFetcher(
         {
-            "https://ftc.test/orgid/GB-CHC-1234567.json": {
+            "https://ftc.test/charity/1234567.json": {
                 "name": "Shelter Bristol Trust"
             }
         }
@@ -119,14 +119,21 @@ def stub_charity_miss():
 
 @pytest.fixture
 def stub_charity_network_error():
-    """Register a validator that simulates a provider outage."""
+    """Register a validator that simulates a provider outage.
+
+    Both the charity and company endpoints error — the validator must
+    block with a 'try again' message rather than silently passing.
+    """
     from app.external_validators.base import ExternalValidatorError
 
     fetcher = _FakeFetcher(
         {
-            "https://ftc.test/orgid/GB-CHC-1234567.json": ExternalValidatorError(
+            "https://ftc.test/charity/1234567.json": ExternalValidatorError(
                 "HTTP 503"
-            )
+            ),
+            "https://ftc.test/company/1234567.json": ExternalValidatorError(
+                "HTTP 503"
+            ),
         }
     )
     register_validator(
@@ -249,9 +256,12 @@ def test_save_page_rejects_unknown_registration_number(
     assert "registered organisation with that number" in body.lower()
 
 
-def test_save_page_tolerates_network_failure_and_proceeds(
+def test_save_page_blocks_on_network_failure(
     client, applicant, seeded_ehcf, stub_charity_network_error
 ):
+    """Transport errors must BLOCK — the API is the gate, we never let an
+    unverified number through just because the register is unreachable.
+    """
     app = _start_app(client, applicant)
 
     response = client.post(
@@ -266,9 +276,9 @@ def test_save_page_tolerates_network_failure_and_proceeds(
         },
         follow_redirects=False,
     )
-    # Provider outage must NOT block the applicant.
-    assert response.status_code == 302
-    assert "/proposal" in response.headers["Location"]
+    assert response.status_code == 400
+    body = response.get_data(as_text=True).lower()
+    assert "unavailable" in body or "try again" in body
 
 
 def test_save_page_required_error_wins_over_external_check(

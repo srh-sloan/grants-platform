@@ -75,79 +75,82 @@ class TestFindThatCharity:
 
     def test_matches_charity_by_number_with_charity_context(self):
         validator, fetcher = self._validator(
-            {"https://ftc.test/orgid/GB-CHC-1234567.json": {"name": "Shelter Bristol"}}
+            {"https://ftc.test/charity/1234567.json": {"name": "Shelter Bristol"}}
         )
         result = validator.validate("1234567", {"org_type": "charity"})
 
         assert result.ok is True
         assert result.skipped is False
         assert "Shelter Bristol" in result.message
-        assert result.metadata["orgid"] == "GB-CHC-1234567"
         assert result.metadata["name"] == "Shelter Bristol"
-        # Confirms no second request once the first prefix matched.
+        assert result.metadata["number"] == "1234567"
+        # Confirms no second request once the first endpoint matched.
         assert len(fetcher.calls) == 1
 
     def test_matches_company_by_number_with_cic_context(self):
         validator, _ = self._validator(
-            {"https://ftc.test/orgid/GB-COH-09876543.json": {"name": "Pathways CIC"}}
+            {"https://ftc.test/company/09876543.json": {"name": "Pathways CIC"}}
         )
         result = validator.validate("09876543", {"org_type": "CIC"})
         assert result.ok is True
-        assert result.metadata["orgid"] == "GB-COH-09876543"
+        assert result.metadata["number"] == "09876543"
 
-    def test_tries_multiple_charity_registers_in_order(self):
-        # Primary CCEW lookup 404s, OSCR returns a hit — we should surface it.
+    def test_falls_back_to_company_endpoint_when_charity_misses(self):
+        # Applicant picked "charity" but the number is actually a company.
+        # We try /charity first (404), then /company (hit).
         validator, fetcher = self._validator(
-            {"https://ftc.test/orgid/GB-SC-045123.json": {"name": "Glasgow Outreach SCIO"}}
+            {"https://ftc.test/company/12345678.json": {"name": "Some Co Ltd"}}
         )
-        result = validator.validate("SC045123", {"org_type": "charity"})
+        result = validator.validate("12345678", {"org_type": "charity"})
         assert result.ok is True
-        # When the user types "SC045123" we detect the SC prefix and jump
-        # straight to OSCR — no wasteful CCEW round-trip.
-        assert [call[0] for call in fetcher.calls] == [
-            "https://ftc.test/orgid/GB-SC-045123.json"
+        urls = [call[0] for call in fetcher.calls]
+        assert urls == [
+            "https://ftc.test/charity/12345678.json",
+            "https://ftc.test/company/12345678.json",
         ]
 
-    def test_input_with_full_orgid_is_respected(self):
+    def test_strips_orgid_prefix_before_calling_api(self):
         validator, fetcher = self._validator(
-            {"https://ftc.test/orgid/GB-CHC-1234567.json": {"name": "OK"}}
+            {"https://ftc.test/charity/1234567.json": {"name": "OK"}}
         )
-        result = validator.validate("GB-CHC-1234567", {"org_type": "company"})
-        # Even though the user's org_type context would route to GB-COH, the
-        # fully-qualified prefix in the input takes precedence.
+        result = validator.validate("GB-CHC-1234567", {"org_type": "charity"})
         assert result.ok is True
-        assert fetcher.calls[0][0] == "https://ftc.test/orgid/GB-CHC-1234567.json"
+        assert fetcher.calls[0][0] == "https://ftc.test/charity/1234567.json"
 
     def test_tolerates_mixed_punctuation_and_whitespace(self):
         validator, _ = self._validator(
-            {"https://ftc.test/orgid/GB-CHC-1234567.json": {"name": "OK"}}
+            {"https://ftc.test/charity/1234567.json": {"name": "OK"}}
         )
         assert validator.validate(" 1234567 ", {"org_type": "charity"}).ok
         assert validator.validate("1,234,567", {"org_type": "charity"}).ok
 
-    def test_returns_invalid_when_no_register_matches(self):
+    def test_rejects_when_no_endpoint_matches(self):
+        # Every endpoint returns 404 → definitive "not found".
         validator, fetcher = self._validator({})
-        result = validator.validate("1234567", {"org_type": "charity"})
+        result = validator.validate("9999999", {"org_type": "charity"})
         assert result.ok is False
         assert result.skipped is False
         assert "couldn't find" in result.message.lower()
-        # Tried all three charity prefixes.
-        assert len(fetcher.calls) == 3
+        # Tried both charity and company endpoints.
+        assert len(fetcher.calls) == 2
 
-    def test_skips_on_transport_error(self):
-        # A 5xx from FindThatCharity isn't a user problem — surface as
-        # "skipped" so the runner doesn't block the applicant.
+    def test_blocks_on_transport_error(self):
+        # User wants the API to be the gate — transport errors BLOCK the
+        # applicant rather than silently letting them through.
         validator, _ = self._validator(
             {
-                "https://ftc.test/orgid/GB-CHC-1234567.json": ExternalValidatorError(
+                "https://ftc.test/charity/1234567.json": ExternalValidatorError(
                     "HTTP 503"
-                )
+                ),
+                "https://ftc.test/company/1234567.json": ExternalValidatorError(
+                    "HTTP 503"
+                ),
             }
         )
         result = validator.validate("1234567", {"org_type": "charity"})
-        assert result.ok is True
-        assert result.skipped is True
-        assert "try" in result.message.lower() or "continue" in result.message.lower()
+        assert result.ok is False
+        assert result.skipped is False
+        assert "unavailable" in result.message.lower() or "try again" in result.message.lower()
 
     def test_rejects_empty_input(self):
         validator, fetcher = self._validator({})
@@ -156,27 +159,37 @@ class TestFindThatCharity:
         assert fetcher.calls == []
 
     def test_falls_back_when_org_type_missing(self):
-        # No org_type context → try the default fallback order.
+        # No org_type context → try the default fallback order
+        # (charity first, then company).
         validator, fetcher = self._validator(
-            {"https://ftc.test/orgid/GB-COH-12345678.json": {"name": "Some Co Ltd"}}
+            {"https://ftc.test/company/12345678.json": {"name": "Some Co Ltd"}}
         )
         result = validator.validate("12345678", {})
         assert result.ok is True
-        # CCEW tried first (miss), then Companies House (hit).
         urls = [call[0] for call in fetcher.calls]
-        assert urls[0] == "https://ftc.test/orgid/GB-CHC-12345678.json"
-        assert urls[1] == "https://ftc.test/orgid/GB-COH-12345678.json"
+        assert urls == [
+            "https://ftc.test/charity/12345678.json",
+            "https://ftc.test/company/12345678.json",
+        ]
 
     def test_extracts_org_name_from_alternative_keys(self):
         validator, _ = self._validator(
             {
-                "https://ftc.test/orgid/GB-CHC-1234567.json": {
+                "https://ftc.test/charity/1234567.json": {
                     "organisation_name": "Homes First"
                 }
             }
         )
         result = validator.validate("1234567", {"org_type": "charity"})
         assert result.metadata["name"] == "Homes First"
+
+    def test_random_string_is_rejected_via_api_404(self):
+        # The core promise: a random string submitted by an applicant hits
+        # the API, gets a 404, and is rejected. No offline bypass.
+        validator, fetcher = self._validator({})
+        result = validator.validate("asdfghjkl", {"org_type": "charity"})
+        assert result.ok is False
+        assert len(fetcher.calls) >= 1
 
 
 # ---------------------------------------------------------------------------

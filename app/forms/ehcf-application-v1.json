@@ -25,6 +25,7 @@
           "id": "registration_number",
           "type": "text",
           "label": "Charity or company registration number",
+          "hint": "For example 1234567 for a charity, 12345678 for a company, or SC012345 for a Scottish organisation. We check this against the UK charity and company registers.",
           "required": true,
           "external_validator": {
             "name": "find_that_charity",
