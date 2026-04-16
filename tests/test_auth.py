@@ -380,6 +380,18 @@ def test_anonymous_dashboard_redirects_to_login_with_next(client):
     assert "next=" in location
 
 
+def test_login_page_does_not_flash_default_login_message(client):
+    """Flask-Login's default ``login_message`` is suppressed so it does not
+    render as a banner on the sign-in page itself (where it is redundant)."""
+    # Hitting a protected page would, by default, flash "Please log in to
+    # access this page." on the subsequent redirect target.
+    response = client.get("/apply/", follow_redirects=True)
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Sign in" in body  # confirms we landed on the login page
+    assert "Please log in to access this page" not in body
+
+
 def test_load_user_returns_user_by_id(app, make_user):
     user, _ = make_user(email="loader@x.test")
     from app.auth import load_user

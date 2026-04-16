@@ -36,6 +36,10 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
+    # Suppress Flask-Login's default "Please log in to access this page." flash.
+    # The sign-in page already explains its purpose and ``next=`` preserves the
+    # originally requested URL, so the banner is redundant noise on /auth/login.
+    login_manager.login_message = None
     csrf.init_app(app)
 
     # Register models + user loader on the extension (both need the app context).
