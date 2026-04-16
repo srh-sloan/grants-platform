@@ -2,7 +2,9 @@
 
 Longer-form notes for Claude / any AI pair working on this repo. The `README.md`
 is the source of truth for what the team has actually agreed; this file is
-reference material and working context.
+reference material and working context. `PLAN.md` holds the feature
+catalogue, phase ordering, and parallel-stream breakdown — consult it before
+picking up work so you don't duplicate another stream or jump phases.
 
 ## Project Overview
 

@@ -103,8 +103,10 @@ The SQLite file lives at `./grants.db` by default.
 
 ## Reference material
 
+- `PLAN.md` — feature catalogue, phase ordering, and who-builds-what-in-parallel
 - `refs/ehcf-prospectus.md` — the first grant we're modelling
 - `refs/pride-in-place-prospectus.md` — a second grant, to stress-test flexibility
+- `refs/common-ground-award-prospectus.md`, `refs/changing-futures-lived-experience-support-grant-prospectus.md`, `refs/local-digital-fund-round-6-prospectus.md` — further shapes (small-award, multi-stage, council-led, partnership)
 - `CLAUDE.md` — fuller architectural notes (may drift ahead of what's built; the README is the source of truth for what's actually agreed)
 
 ## Hackathon resources
