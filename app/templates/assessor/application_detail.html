@@ -442,6 +442,22 @@
       </form>
     {% endif %}
 
+    {# Monitoring plan link — visible when approved or plan already exists #}
+    {% set has_monitoring_plan = assessment and assessment.notes_json and assessment.notes_json.get("_monitoring_plan") %}
+    {% if application.status.value == "approved" or has_monitoring_plan %}
+      <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+      <h2 class="govuk-heading-m">Monitoring</h2>
+      <p class="govuk-body">
+        <a class="govuk-link" href="{{ url_for('assessor.monitoring', app_id=application.id) }}">
+          {% if has_monitoring_plan %}
+            View monitoring plan
+          {% else %}
+            Generate monitoring plan
+          {% endif %}
+        </a>
+      </p>
+    {% endif %}
+
   </div>
 </div>
 {% endblock %}

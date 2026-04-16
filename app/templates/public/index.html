@@ -17,15 +17,17 @@
       <h2 class="govuk-heading-l">Open grants</h2>
 
       {% if grants %}
-        <ul class="govuk-list" data-testid="grant-list">
+        <ul class="govuk-list app-grant-list" data-testid="grant-list">
           {% for grant in grants %}
-            <li class="govuk-!-margin-bottom-6">
-              <h3 class="govuk-heading-m govuk-!-margin-bottom-1">
+            <li class="app-grant-list__item">
+              <p class="govuk-!-margin-bottom-2">
+                {{ govukTag({"text": "Open", "classes": "govuk-tag--green"}) }}
+              </p>
+              <h3 class="govuk-heading-m govuk-!-margin-bottom-2">
                 {{ grant.name }}
-                {{ govukTag({"text": "Open", "classes": "govuk-tag--green govuk-!-margin-left-2"}) }}
               </h3>
               {% if grant.summary %}
-                <p class="govuk-body">{{ grant.summary }}</p>
+                <p class="govuk-body govuk-!-margin-bottom-4">{{ grant.summary }}</p>
               {% endif %}
               {% if current_user.is_authenticated and current_user.is_applicant %}
                 {{ govukButton({"text": "Apply for this grant", "href": url_for("applicant.eligibility", grant_slug=grant.slug), "classes": "govuk-button--start govuk-!-margin-bottom-0"}) }}

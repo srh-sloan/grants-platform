@@ -12,8 +12,7 @@
     {% set _nav_items = [
       {"href": url_for("assessor.queue"),      "text": "Queue"},
       {"href": url_for("assessor.allocation"), "text": "Allocation"},
-      {"href": url_for("assessor.list_users"), "text": "Accounts"},
-      {"href": url_for("auth.logout"),         "text": "Sign out"}
+      {"href": url_for("assessor.list_users"), "text": "Accounts"}
     ] %}
   {% else %}
     {% set _nav_items = [
@@ -39,6 +38,7 @@
   {% endset %}
 {% else %}
   {% set _nav_items = [
+    {"href": url_for("public.about"),  "text": "About"},
     {"href": url_for("auth.login"),    "text": "Sign in"},
     {"href": url_for("auth.register"), "text": "Create account"}
   ] %}

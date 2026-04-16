@@ -1,0 +1,4 @@
+interface:
+  display_name: "UX Journey"
+  short_description: "Map journeys and deliver prioritized UX fixes."
+  default_prompt: "Analyze the core user journey, identify friction points, and deliver prioritized UX improvements with clear acceptance criteria."

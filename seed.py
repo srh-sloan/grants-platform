@@ -114,6 +114,12 @@ _DEMO_USERS = [
         "role": UserRole.APPLICANT,
         "org_name": "Demo Organisation",
     },
+    {
+        "email": "William.May@communities.gov.uk",
+        "password": "ABCDE12345",
+        "role": UserRole.APPLICANT,
+        "org_name": "William May Organisation",
+    },
 ]
 
 

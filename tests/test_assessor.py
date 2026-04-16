@@ -460,3 +460,100 @@ def test_allocation_review_link_threads_return_to(
     resp = client.get("/assess/allocation")
     assert resp.status_code == 200
     assert f"/assess/{submitted_app.id}?return_to=allocation".encode() in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Tests: Monitoring plan
+# ---------------------------------------------------------------------------
+
+
+def test_monitoring_page_renders(client, assessor, submitted_app, assessment):
+    """GET monitoring page returns 200."""
+    _login(client)
+    resp = client.get(f"/assess/{submitted_app.id}/monitoring")
+    assert resp.status_code == 200
+    assert b"Monitoring plan" in resp.data
+    assert b"Generate monitoring plan" in resp.data
+
+
+def test_monitoring_generate_stores_plan(client, assessor, submitted_app, assessment):
+    """POST to monitoring stores the AI-generated plan in notes_json."""
+    _login(client)
+
+    fake_plan = {
+        "kpis": [
+            {
+                "name": "People supported",
+                "definition": "Number of individuals receiving support",
+                "target": "200 per year",
+                "baseline": "0",
+                "evidence_source": "Case management system",
+                "reporting_frequency": "quarterly",
+                "owner": "Project manager",
+            }
+        ],
+        "milestones": [
+            {
+                "period": "Month 1-3",
+                "description": "Recruit staff and set up services",
+                "evidence_required": "Signed contracts and induction records",
+            }
+        ],
+        "risk_review_points": ["Month 6", "Month 12", "Month 24"],
+        "summary": "A comprehensive monitoring plan for homelessness support.",
+    }
+
+    # Mock the AI call at the module level in assessor
+    from unittest.mock import patch
+    with patch("app.assessor._call_claude_for_monitoring", return_value=fake_plan):
+        resp = client.post(
+            f"/assess/{submitted_app.id}/monitoring",
+            follow_redirects=True,
+        )
+
+    assert resp.status_code == 200
+    _db.session.refresh(assessment)
+    stored_plan = assessment.notes_json.get("_monitoring_plan")
+    assert stored_plan is not None
+    assert stored_plan["kpis"][0]["name"] == "People supported"
+    assert stored_plan["summary"] == "A comprehensive monitoring plan for homelessness support."
+
+
+def test_monitoring_page_shows_kpis(client, assessor, submitted_app, assessment):
+    """After generating a plan, the monitoring page displays the KPI table."""
+    _login(client)
+
+    # Pre-populate a monitoring plan directly
+    assessment.notes_json = {
+        "_monitoring_plan": {
+            "kpis": [
+                {
+                    "name": "Rough sleepers housed",
+                    "definition": "People moved into settled accommodation",
+                    "target": "50 per year",
+                    "baseline": "0",
+                    "evidence_source": "Housing records",
+                    "reporting_frequency": "quarterly",
+                    "owner": "Housing lead",
+                }
+            ],
+            "milestones": [
+                {
+                    "period": "Month 1-3",
+                    "description": "Set up referral pathways",
+                    "evidence_required": "Partnership agreements",
+                }
+            ],
+            "risk_review_points": ["Month 6", "Month 12"],
+            "summary": "Monitoring framework for housing support.",
+        }
+    }
+    _db.session.commit()
+
+    resp = client.get(f"/assess/{submitted_app.id}/monitoring")
+    assert resp.status_code == 200
+    assert b"Rough sleepers housed" in resp.data
+    assert b"Housing records" in resp.data
+    assert b"Set up referral pathways" in resp.data
+    assert b"Month 6" in resp.data
+    assert b"Regenerate monitoring plan" in resp.data
