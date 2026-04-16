@@ -350,3 +350,68 @@ def test_ehcf_funding_page_has_conditional_capital_fields():
     assert "planning_permission" in conditional_ids
     assert "contractor_identified" in conditional_ids
     assert "capital_readiness" in conditional_ids
+
+
+# ---------------------------------------------------------------------------
+# Local Digital partnership schema (P4.4)
+# ---------------------------------------------------------------------------
+
+
+def _load_local_digital_schema() -> dict:
+    path = pathlib.Path("app/forms/local-digital-application-v1.json")
+    return json.loads(path.read_text())
+
+
+def test_local_digital_schema_loads_and_has_pages():
+    schema = _load_local_digital_schema()
+    assert schema["id"] == "local-digital-application"
+    assert schema["version"] == 1
+    page_ids = [p["id"] for p in schema["pages"]]
+    assert "partnership" in page_ids
+    assert "organisation" in page_ids
+
+
+def test_local_digital_partnership_page_has_conditional_fields():
+    """Partnership detail fields are conditional on is_partnership == 'yes'."""
+    schema = _load_local_digital_schema()
+    partnership_page = next(p for p in schema["pages"] if p["id"] == "partnership")
+    conditional_ids = [
+        f["id"] for f in partnership_page["fields"] if f.get("visible_when")
+    ]
+    assert "lead_org_role" in conditional_ids
+    assert "partner1_name" in conditional_ids
+    assert "partner1_role" in conditional_ids
+
+
+def test_local_digital_partnership_fields_hidden_when_not_partnership():
+    """Partnership fields are hidden when is_partnership is 'no'."""
+    schema = _load_local_digital_schema()
+    partnership_page = next(p for p in schema["pages"] if p["id"] == "partnership")
+    answers = {"is_partnership": "no"}
+    vis = visible_fields(partnership_page, answers)
+    visible_ids = [f["id"] for f in vis]
+    assert "is_partnership" in visible_ids
+    assert "partner1_name" not in visible_ids
+    assert "lead_org_role" not in visible_ids
+
+
+def test_local_digital_partnership_fields_shown_when_partnership():
+    """Partnership fields appear when is_partnership is 'yes'."""
+    schema = _load_local_digital_schema()
+    partnership_page = next(p for p in schema["pages"] if p["id"] == "partnership")
+    answers = {"is_partnership": "yes"}
+    vis = visible_fields(partnership_page, answers)
+    visible_ids = [f["id"] for f in vis]
+    assert "is_partnership" in visible_ids
+    assert "partner1_name" in visible_ids
+    assert "lead_org_role" in visible_ids
+
+
+def test_local_digital_all_field_types_supported():
+    """Every field type in the schema is in SUPPORTED_FIELD_TYPES."""
+    schema = _load_local_digital_schema()
+    for page in schema["pages"]:
+        for field in page["fields"]:
+            assert field["type"] in SUPPORTED_FIELD_TYPES, (
+                f"Field {field['id']!r} has unsupported type {field['type']!r}"
+            )

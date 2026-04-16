@@ -1,0 +1,130 @@
+{
+  "id": "local-digital-application",
+  "version": 1,
+  "kind": "application",
+  "pages": [
+    {
+      "id": "organisation",
+      "title": "About your organisation",
+      "fields": [
+        {"id": "name", "type": "text", "label": "Organisation name", "required": true},
+        {
+          "id": "org_type",
+          "type": "radio",
+          "label": "Organisation type",
+          "required": true,
+          "options": [
+            {"value": "local_authority", "label": "Local authority"},
+            {"value": "combined_authority", "label": "Combined authority"},
+            {"value": "fire_rescue", "label": "Fire and rescue authority"},
+            {"value": "police", "label": "Police authority"},
+            {"value": "nhs_trust", "label": "NHS trust or clinical commissioning group"}
+          ]
+        },
+        {
+          "id": "contact_name",
+          "type": "text",
+          "label": "Senior responsible officer name",
+          "required": true
+        },
+        {
+          "id": "contact_email",
+          "type": "text",
+          "label": "Senior responsible officer email",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "partnership",
+      "title": "Partnership details",
+      "fields": [
+        {
+          "id": "is_partnership",
+          "type": "radio",
+          "label": "Is this a partnership application?",
+          "required": true,
+          "options": [
+            {"value": "yes", "label": "Yes"},
+            {"value": "no", "label": "No, individual application"}
+          ]
+        },
+        {
+          "id": "lead_org_role",
+          "type": "textarea",
+          "label": "Describe the lead applicant's role in the partnership",
+          "required": false,
+          "word_limit": 300,
+          "visible_when": {"field": "is_partnership", "operator": "equals", "value": "yes"}
+        },
+        {
+          "id": "partner1_name",
+          "type": "text",
+          "label": "Partner organisation 1 — name",
+          "required": false,
+          "visible_when": {"field": "is_partnership", "operator": "equals", "value": "yes"}
+        },
+        {
+          "id": "partner1_role",
+          "type": "textarea",
+          "label": "Partner organisation 1 — role in the project",
+          "required": false,
+          "word_limit": 200,
+          "visible_when": {"field": "is_partnership", "operator": "equals", "value": "yes"}
+        },
+        {
+          "id": "partner2_name",
+          "type": "text",
+          "label": "Partner organisation 2 — name (if applicable)",
+          "required": false,
+          "visible_when": {"field": "is_partnership", "operator": "equals", "value": "yes"}
+        },
+        {
+          "id": "partner2_role",
+          "type": "textarea",
+          "label": "Partner organisation 2 — role in the project",
+          "required": false,
+          "word_limit": 200,
+          "visible_when": {"field": "is_partnership", "operator": "equals", "value": "yes"}
+        }
+      ]
+    },
+    {
+      "id": "project",
+      "title": "Your project",
+      "fields": [
+        {
+          "id": "project_name",
+          "type": "text",
+          "label": "Project name",
+          "required": true
+        },
+        {
+          "id": "project_summary",
+          "type": "textarea",
+          "label": "Describe your project and expected outcomes for local service delivery",
+          "required": true,
+          "word_limit": 500
+        },
+        {
+          "id": "start_date",
+          "type": "date",
+          "label": "Expected project start date",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "declaration",
+      "title": "Declaration",
+      "fields": [
+        {
+          "id": "agree_terms",
+          "type": "checkbox",
+          "label": "I confirm the information provided is accurate and I am authorised to submit this application on behalf of the lead organisation",
+          "required": true
+        }
+      ]
+    }
+  ]
+}
