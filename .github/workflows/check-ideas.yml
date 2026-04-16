@@ -1,0 +1,73 @@
+name: Check ideas/
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  filenames:
+    name: ideas/ filename convention
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate filenames in ideas/
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Files in ideas/ must:
+          #   - have extension .md / .MD / .txt / .TXT
+          #   - start with a YYYY-MM-DD-HHMM- timestamp prefix
+          # README.md is the one exception — it documents the directory itself,
+          # so GitHub renders it inline when browsing ideas/.
+          prefix='^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])-([01][0-9]|2[0-3])[0-5][0-9]-.+\.(md|MD|txt|TXT)$'
+          ext='\.(md|MD|txt|TXT)$'
+
+          if [[ ! -d ideas ]]; then
+            echo "No ideas/ directory; nothing to check."
+            exit 0
+          fi
+
+          bad_ext=()
+          bad_prefix=()
+          while IFS= read -r -d '' path; do
+            name=$(basename "$path")
+            if [[ "$name" == "README.md" ]]; then
+              continue
+            fi
+            if [[ ! "$name" =~ $ext ]]; then
+              bad_ext+=("$path")
+              continue
+            fi
+            if [[ ! "$name" =~ $prefix ]]; then
+              bad_prefix+=("$path")
+            fi
+          done < <(find ideas -type f -print0)
+
+          fail=0
+
+          if (( ${#bad_ext[@]} > 0 )); then
+            fail=1
+            echo "::error::Files in ideas/ must be .md or .txt:"
+            for p in "${bad_ext[@]}"; do
+              echo "  - $p"
+            done
+          fi
+
+          if (( ${#bad_prefix[@]} > 0 )); then
+            fail=1
+            echo "::error::Files in ideas/ must start with a YYYY-MM-DD-HHMM- prefix (e.g. 2026-04-16-0949-my-idea.md):"
+            for p in "${bad_prefix[@]}"; do
+              echo "  - $p"
+            done
+          fi
+
+          if (( fail == 1 )); then
+            echo
+            echo "See ideas/README.md for the naming convention."
+            exit 1
+          fi
+
+          echo "All files in ideas/ pass validation."
