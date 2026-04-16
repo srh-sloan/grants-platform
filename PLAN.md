@@ -131,12 +131,28 @@ page, talks to SQLite, and has seeded data.
 seeded grants from the DB; `pytest` passes.
 
 **Shipped cross-stream contracts** (change these only with a coordinated update):
-- Form schema shape → `app/forms/ehcf-application-v1.json`
+- Form schema shape → `app/forms/ehcf-application-v1.json` + `app/forms_runner.py`
 - Grant config shape → `seed/grants/ehcf.json` (validated by `seed.validate_grant_config`)
 - Shared enums (`UserRole`, `GrantStatus`, `FormKind`, `ApplicationStatus`,
   `AssessmentRecommendation`) → `app/models.py`
+- Blueprint URL prefixes: `/auth`, `/apply`, `/assess` — pre-registered in
+  `_BLUEPRINT_MODULES` so streams never edit `app/__init__.py`
+- Role decorators `applicant_required` / `assessor_required` → `app/auth.py`
+- Pure scoring API (`calculate_weighted_score`, `has_auto_reject`, ...) →
+  `app/scoring.py`
+- Pure form-runner API (`list_pages`, `validate_page`, `merge_page_answers`, ...) →
+  `app/forms_runner.py`
 - Static asset path → GOV.UK fonts/images served at `/assets/<path>` via
   `app.public.govuk_assets` so the prebuilt CSS resolves fonts correctly.
+- Stream ownership is documented in `CONTRIBUTING.md`.
+
+**Shipped tooling:**
+- `uv` for deps and `uv run` for scripts (lockfile at `uv.lock`, Python pinned
+  via `.python-version`)
+- `Dockerfile` + `docker-compose.yml` (prod profile with gunicorn, dev profile
+  with Flask `--debug` + bind-mount)
+- `/healthz` endpoint + compose healthcheck
+- `ruff` linting config in `pyproject.toml`
 
 ### Phase 1 — Thinnest end-to-end slice
 
