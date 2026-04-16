@@ -39,6 +39,14 @@ def validate_grant_config(config: dict, path: Path) -> None:
     if missing:
         raise ValueError(f"{path}: missing keys {sorted(missing)}")
 
+    criterion_keys = {"id", "label", "weight", "max"}
+    for criterion in config["criteria"]:
+        gaps = criterion_keys - criterion.keys()
+        if gaps:
+            raise ValueError(
+                f"{path}: criterion {criterion.get('id')!r} missing keys {sorted(gaps)}"
+            )
+
     weights = sum(c["weight"] for c in config["criteria"])
     if weights != 100:
         raise ValueError(

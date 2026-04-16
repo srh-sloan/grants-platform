@@ -1,7 +1,13 @@
-"""Flask application factory."""
+"""Flask application factory.
+
+Stream ownership (see ``CONTRIBUTING.md``): each blueprint module listed in
+``_BLUEPRINT_MODULES`` is owned by exactly one stream. New blueprints are
+added to this tuple — the rest of the factory stays untouched.
+"""
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 from flask import Flask
@@ -9,6 +15,15 @@ from govuk_frontend_wtf.main import WTFormsHelpers
 from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
 
 from app.extensions import csrf, db, login_manager
+
+# Blueprint modules, each exporting a ``bp`` attribute. Pre-seeded so streams
+# only edit their own file — no merge conflicts on this factory.
+_BLUEPRINT_MODULES: tuple[str, ...] = (
+    "app.public",
+    "app.auth",
+    "app.applicant",
+    "app.assessor",
+)
 
 
 def create_app(config_class: str | type = "config.Config") -> Flask:
@@ -23,17 +38,14 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     login_manager.login_view = "auth.login"
     csrf.init_app(app)
 
-    # Import models so they're registered with SQLAlchemy's metadata.
+    # Register models + user loader on the extension (both need the app context).
     with app.app_context():
-        from app import models  # noqa: F401
-
-        @login_manager.user_loader
-        def _load_user(user_id: str):
-            return db.session.get(models.User, int(user_id))
+        from app import models  # noqa: F401  (registers tables)
+        from app.auth import load_user  # noqa: F401  (registers @user_loader)
 
     _register_blueprints(app)
+    _register_error_handlers(app)
 
-    # Ensure upload folder exists in dev.
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     return app
@@ -55,6 +67,18 @@ def _install_jinja_loaders(app: Flask) -> None:
 
 
 def _register_blueprints(app: Flask) -> None:
-    from app.public import bp as public_bp
+    for module_path in _BLUEPRINT_MODULES:
+        module = importlib.import_module(module_path)
+        app.register_blueprint(module.bp)
 
-    app.register_blueprint(public_bp)
+
+def _register_error_handlers(app: Flask) -> None:
+    from flask import render_template
+
+    @app.errorhandler(404)
+    def _not_found(_err):
+        return render_template("errors/404.html"), 404
+
+    @app.errorhandler(500)
+    def _server_error(_err):
+        return render_template("errors/500.html"), 500

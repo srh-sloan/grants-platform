@@ -24,11 +24,22 @@ def test_validator_rejects_bad_weights(tmp_path: Path):
         "name": "X",
         "status": "open",
         "criteria": [
-            {"id": "a", "weight": 40, "max": 3},
-            {"id": "b", "weight": 40, "max": 3},
+            {"id": "a", "label": "A", "weight": 40, "max": 3},
+            {"id": "b", "label": "B", "weight": 40, "max": 3},
         ],
     }
     with pytest.raises(ValueError, match="sum to 100"):
+        validate_grant_config(bad, tmp_path / "x.json")
+
+
+def test_validator_rejects_missing_criterion_keys(tmp_path: Path):
+    bad = {
+        "slug": "x",
+        "name": "X",
+        "status": "open",
+        "criteria": [{"id": "a", "weight": 100}],  # missing label + max
+    }
+    with pytest.raises(ValueError, match="missing keys"):
         validate_grant_config(bad, tmp_path / "x.json")
 
 

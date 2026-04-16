@@ -16,13 +16,19 @@ See ``CLAUDE.md`` for the full contract shapes.
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import UTC, datetime
 
 from flask_login import UserMixin
-from sqlalchemy import JSON, Enum as SAEnum
+from sqlalchemy import JSON
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware UTC `now`, used as the column default for timestamps."""
+    return datetime.now(UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -75,10 +81,10 @@ class Organisation(db.Model):
     contact_name: Mapped[str | None] = mapped_column(db.String(255))
     contact_email: Mapped[str | None] = mapped_column(db.String(255))
     profile_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow, nullable=False)
 
-    users: Mapped[list["User"]] = relationship(back_populates="organisation")
-    applications: Mapped[list["Application"]] = relationship(back_populates="organisation")
+    users: Mapped[list[User]] = relationship(back_populates="organisation")
+    applications: Mapped[list[Application]] = relationship(back_populates="organisation")
 
 
 class User(UserMixin, db.Model):
@@ -91,10 +97,10 @@ class User(UserMixin, db.Model):
         SAEnum(UserRole, native_enum=False), nullable=False
     )
     org_id: Mapped[int | None] = mapped_column(db.ForeignKey("organisations.id"))
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow, nullable=False)
 
     organisation: Mapped[Organisation | None] = relationship(back_populates="users")
-    assessments: Mapped[list["Assessment"]] = relationship(back_populates="assessor")
+    assessments: Mapped[list[Assessment]] = relationship(back_populates="assessor")
 
     # Convenience predicates used across blueprints.
     @property
@@ -121,8 +127,8 @@ class Grant(db.Model):
     )
     config_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
-    forms: Mapped[list["Form"]] = relationship(back_populates="grant")
-    applications: Mapped[list["Application"]] = relationship(back_populates="grant")
+    forms: Mapped[list[Form]] = relationship(back_populates="grant")
+    applications: Mapped[list[Application]] = relationship(back_populates="grant")
 
     @property
     def summary(self) -> str | None:
@@ -157,15 +163,15 @@ class Application(db.Model):
     )
     answers_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     submitted_at: Mapped[datetime | None] = mapped_column()
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
     organisation: Mapped[Organisation] = relationship(back_populates="applications")
     grant: Mapped[Grant] = relationship(back_populates="applications")
-    documents: Mapped[list["Document"]] = relationship(back_populates="application")
-    assessments: Mapped[list["Assessment"]] = relationship(back_populates="application")
+    documents: Mapped[list[Document]] = relationship(back_populates="application")
+    assessments: Mapped[list[Assessment]] = relationship(back_populates="application")
 
 
 class Document(db.Model):
@@ -178,7 +184,7 @@ class Document(db.Model):
     kind: Mapped[str] = mapped_column(db.String(64), nullable=False)
     storage_path: Mapped[str] = mapped_column(db.String(512), nullable=False)
     filename: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    uploaded_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(default=_utcnow, nullable=False)
 
     application: Mapped[Application] = relationship(back_populates="documents")
 

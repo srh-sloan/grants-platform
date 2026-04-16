@@ -30,3 +30,12 @@ def govuk_assets(filename: str):
     """Serve the GOV.UK Frontend fonts/images bundle at the paths the CSS expects."""
     assets_dir = Path(current_app.static_folder) / "assets"
     return send_from_directory(assets_dir, filename)
+
+
+@bp.get("/healthz")
+def healthz():
+    """Liveness probe — returns 200 if the app and DB session are reachable."""
+    from sqlalchemy import text
+
+    db.session.execute(text("SELECT 1"))
+    return {"status": "ok"}, 200
