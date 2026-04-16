@@ -54,7 +54,7 @@ from wtforms.validators import (
     ValidationError,
 )
 
-from app.extensions import db, login_manager
+from app.extensions import db, limiter, login_manager
 from app.models import Organisation, User, UserRole
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -239,6 +239,7 @@ def _is_safe_next_url(target: str | None) -> bool:
 
 
 @bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute; 50 per hour", methods=["POST"])
 def login():
     """Sign in an existing user. GET renders the form; POST validates it."""
     if current_user.is_authenticated:
@@ -269,6 +270,7 @@ def login():
 
 
 @bp.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per minute; 30 per hour", methods=["POST"])
 def register():
     """Create an applicant account plus its owning organisation."""
     if current_user.is_authenticated:

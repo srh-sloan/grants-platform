@@ -14,7 +14,7 @@ from flask import Flask
 from govuk_frontend_wtf.main import WTFormsHelpers
 from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
 
-from app.extensions import csrf, db, login_manager
+from app.extensions import csrf, db, limiter, login_manager
 
 # Blueprint modules, each exporting a ``bp`` attribute. Pre-seeded so streams
 # only edit their own file — no merge conflicts on this factory.
@@ -44,6 +44,12 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     # originally requested URL, so the banner is redundant noise on /auth/login.
     login_manager.login_message = None
     csrf.init_app(app)
+    # Rate limiter is disabled under TESTING so the auth/test suite can hammer
+    # /auth/login without tripping it. Per-route limits are applied in
+    # ``app.auth`` via ``@limiter.limit(...)``.
+    limiter.init_app(app)
+    if app.config.get("TESTING"):
+        limiter.enabled = False
 
     # Register models + user loader on the extension (both need the app context).
     with app.app_context():
