@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
+
+{% block title %}Review generated grant configuration{% endblock %}
+
+{% block content %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-full">
+
+    <a href="{{ url_for('admin.import_grant') }}" class="govuk-back-link">Back to import</a>
+
+    <h1 class="govuk-heading-xl">Review generated grant configuration</h1>
+
+    <p class="govuk-body">
+      The AI has drafted the three JSON artefacts below from your prospectus.
+      <strong>Review and edit each one carefully before saving.</strong>
+      The grant will be saved in <strong>draft</strong> status — it will not be
+      visible to applicants until published.
+    </p>
+
+    {% if errors %}
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+      <div role="alert">
+        <h2 class="govuk-error-summary__title">AI generation produced warnings</h2>
+        <div class="govuk-error-summary__body">
+          <ul class="govuk-list govuk-error-summary__list">
+            {% for err in errors %}
+            <li>{{ err }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="govuk-inset-text">
+      <p class="govuk-body govuk-!-margin-bottom-0">
+        Check that criterion weights sum to 100. Verify eligibility rule types
+        (<code>in</code>, <code>equals</code>, <code>max</code>, <code>min</code>)
+        and their values. Confirm the slug is unique and URL-safe.
+      </p>
+    </div>
+
+    <form method="post" action="{{ url_for('admin.save_grant') }}" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {# --- Grant config --- #}
+      <h2 class="govuk-heading-l">1. Grant configuration</h2>
+      <p class="govuk-body">
+        Defines eligibility rules, scoring criteria and weights, award ranges, and timeline.
+        Stored as <code>grant.config_json</code>.
+      </p>
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="grant_config_json">
+          grant_config_json
+        </label>
+        <textarea
+          class="govuk-textarea govuk-!-font-family-monospace"
+          id="grant_config_json"
+          name="grant_config_json"
+          rows="30"
+          spellcheck="false">{{ grant_config_json }}</textarea>
+      </div>
+
+      {# --- Application form schema --- #}
+      <h2 class="govuk-heading-l">2. Application form schema</h2>
+      <p class="govuk-body">
+        Defines the pages and fields applicants see. Stored as <code>form.schema_json</code>
+        for the <code>application</code> form kind.
+      </p>
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="application_schema_json">
+          application_schema_json
+        </label>
+        <textarea
+          class="govuk-textarea govuk-!-font-family-monospace"
+          id="application_schema_json"
+          name="application_schema_json"
+          rows="30"
+          spellcheck="false">{{ application_schema_json }}</textarea>
+      </div>
+
+      {# --- Assessment schema --- #}
+      <h2 class="govuk-heading-l">3. Assessment schema</h2>
+      <p class="govuk-body">
+        The assessment form is always generic — scoring blocks (0–3 + mandatory notes)
+        are rendered at runtime from the criteria in the grant config above.
+        No changes are usually needed here.
+      </p>
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="assessment_schema_json">
+          assessment_schema_json
+        </label>
+        <textarea
+          class="govuk-textarea govuk-!-font-family-monospace"
+          id="assessment_schema_json"
+          name="assessment_schema_json"
+          rows="12"
+          spellcheck="false">{{ assessment_schema_json }}</textarea>
+      </div>
+
+      <div class="govuk-button-group">
+        {{ govukButton({"text": "Save as draft grant", "preventDoubleClick": true}) }}
+        <a class="govuk-link" href="{{ url_for('admin.import_grant') }}">Discard and start again</a>
+      </div>
+
+    </form>
+
+  </div>
+</div>
+{% endblock %}
