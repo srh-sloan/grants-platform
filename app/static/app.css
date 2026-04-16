@@ -40,7 +40,7 @@
 }
 
 .app-grant-list__item:first-child {
-  padding-top: 10px;
+  padding-top: 0;
   border-top: 0;
 }
 
