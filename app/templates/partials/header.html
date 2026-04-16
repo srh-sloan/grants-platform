@@ -1,15 +1,12 @@
 {% from 'govuk_frontend_jinja/components/skip-link/macro.html' import govukSkipLink %}
-{% from 'govuk_frontend_jinja/components/header/macro.html' import govukHeader %}
 {% from 'govuk_frontend_jinja/components/service-navigation/macro.html' import govukServiceNavigation %}
 
 {{ govukSkipLink({"text": "Skip to main content", "href": "#main-content"}) }}
 
-{# The GOV.UK logo (Tudor Crown + wordmark) is rendered by govukHeader and
-   shipped in govuk-frontend 5.4+ — no opt-in flag is needed on 5.9. #}
-{{ govukHeader({
-  "homepageUrl": url_for('public.index')
-}) }}
-
+{# We deliberately omit the GOV.UK header (govukHeader) because it renders the
+   Tudor Crown + wordmark, and this is a prototype, not an official government
+   service (see CONTRIBUTING.md → "Working interface"). The service-navigation
+   component is crown-free and carries our service name on its own. #}
 {{ govukServiceNavigation({
   "serviceName": "Grants platform",
   "serviceUrl": url_for('public.index')
