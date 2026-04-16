@@ -32,6 +32,7 @@ from flask import (
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from werkzeug.datastructures import MultiDict
 
 from app.auth import applicant_required
@@ -201,6 +202,7 @@ def dashboard():
         db.session.execute(
             select(Application)
             .where(Application.org_id == current_user.org_id)
+            .options(selectinload(Application.grant))
             .order_by(Application.updated_at.desc())
         )
         .scalars()
@@ -305,6 +307,8 @@ def _render_form_page(
         (i for i, p in enumerate(all_pages) if p["id"] == page["id"]),
         0,
     )
+    # Template contract (see templates/forms/page.html docstring): the progress
+    # line renders only when both page_number and total_pages are provided.
     rendered = render_template(
         "forms/page.html",
         form=form,
@@ -315,8 +319,8 @@ def _render_form_page(
         back_url=back_url,
         action_url=action_url,
         csrf_form=_ActionForm(),
-        all_pages=all_pages,
-        current_index=current_index,
+        page_number=current_index + 1,
+        total_pages=len(all_pages),
     )
     return (rendered, status_code) if status_code != 200 else rendered
 

@@ -407,6 +407,15 @@ def test_load_user_returns_none_for_unknown(app):
     assert load_user("9999") is None
 
 
+def test_load_user_returns_none_for_malformed_id(app):
+    """A tampered / legacy session cookie must sign the user out cleanly,
+    not raise and surface as a 500."""
+    from app.auth import load_user
+
+    assert load_user("not-a-number") is None
+    assert load_user("") is None
+
+
 # ---------------------------------------------------------------------------
 # CSRF — flipped on to verify tokens are rendered and required
 # ---------------------------------------------------------------------------

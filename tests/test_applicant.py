@@ -287,6 +287,19 @@ def test_form_page_renders_for_owned_draft(client, applicant, seeded_ehcf):
     assert response.status_code == 200
 
 
+def test_form_page_renders_progress_indicator(client, applicant, seeded_ehcf):
+    """The page.html template only renders 'Page X of Y' when both
+    page_number and total_pages are passed — regression test for the
+    context-name mismatch that previously suppressed the progress line."""
+    _grant, form = seeded_ehcf
+    total_pages = len(form.schema_json["pages"])
+    app = _start_application(client, applicant, seeded_ehcf)
+
+    response = client.get(f"/apply/{app.id}/organisation")
+    body = response.get_data(as_text=True)
+    assert f"Page 1 of {total_pages}" in body
+
+
 def test_form_page_404s_on_unknown_application(client, applicant, seeded_ehcf):
     _login(client, applicant)
     response = client.get("/apply/9999/organisation")
