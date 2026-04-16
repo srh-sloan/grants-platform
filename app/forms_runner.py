@@ -29,6 +29,16 @@ AND a new Jinja macro — coordinate across streams before doing so):
 
 ``text``, ``textarea``, ``radio``, ``checkbox``, ``select``, ``number``,
 ``currency``, ``date``, ``file``.
+
+Field type extensions:
+
+``textarea`` fields may include::
+
+    "word_limit": 500    — optional int, validation error if answer exceeds N words
+
+Word count is ``len(value.split())``: whitespace-separated tokens.  The check
+only runs when the field has a non-empty value; a blank value on a required
+textarea reports a required error, not a word-count error.
 """
 
 from __future__ import annotations
@@ -77,6 +87,21 @@ def prev_page_id(schema: dict, current_page_id: str) -> str | None:
     return None
 
 
+def get_page_position(schema: dict, page_id: str) -> tuple[int, int]:
+    """Return ``(1-based position, total pages)`` for the given ``page_id``.
+
+    Raises :exc:`ValueError` if ``page_id`` is not found in the schema.
+
+    Stream A calls this and passes ``page_number`` and ``total_pages`` to the
+    ``forms/page.html`` template to render the "Page X of Y" indicator.
+    """
+    pages = list_pages(schema)
+    for idx, page in enumerate(pages):
+        if page.get("id") == page_id:
+            return (idx + 1, len(pages))
+    raise ValueError(f"page_id {page_id!r} not found in schema")
+
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
@@ -88,8 +113,13 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
     Returns a mapping of ``field_id -> error message`` for invalid fields.
     An empty dict means the submission is valid.
 
-    Phase 1 scope: required-field check only. Stream B expands to cover
-    numeric ranges, word limits, conditional logic in later phases.
+    Checks performed (in order per field):
+
+    1. **Required** — if ``required`` is true and the value is blank/absent.
+    2. **Word limit** — if ``type`` is ``textarea`` and ``word_limit`` is set,
+       the answer must not exceed that many whitespace-separated tokens.
+       Word-limit is only checked when the field has a non-empty value so it
+       never double-reports alongside the required error.
     """
     errors: dict[str, str] = {}
     for field in page.get("fields") or []:
@@ -97,8 +127,28 @@ def validate_page(page: dict, submitted: dict) -> dict[str, str]:
             raise ValueError(
                 f"Field {field.get('id')!r} has unsupported type {field.get('type')!r}"
             )
-        if field.get("required") and not _has_value(submitted.get(field["id"])):
-            errors[field["id"]] = "This field is required"
+        field_id: str = field["id"]
+        value = submitted.get(field_id)
+
+        # 1. Required check — runs first; if it fires we skip word-limit.
+        if field.get("required") and not _has_value(value):
+            errors[field_id] = "This field is required"
+            continue
+
+        # 2. Word-limit check — textarea only, only when a non-empty value exists.
+        if (
+            field.get("type") == "textarea"
+            and "word_limit" in field
+            and _has_value(value)
+        ):
+            word_limit: int = field["word_limit"]
+            actual_count = len(str(value).split())
+            if actual_count > word_limit:
+                errors[field_id] = (
+                    f"Answer must be {word_limit} words or fewer"
+                    f" (your answer is {actual_count} words)"
+                )
+
     return errors
 
 
@@ -131,6 +181,59 @@ def merge_page_answers(
     merged = dict(existing_answers)
     merged[page_id] = {**(merged.get(page_id) or {}), **page_submission}
     return merged
+
+
+# ---------------------------------------------------------------------------
+# Display helpers
+# ---------------------------------------------------------------------------
+
+
+def format_answer(field: dict, value: object) -> str:
+    """Format a field value for human-readable display in summaries.
+
+    Returns an empty string for ``None`` or ``""`` so callers can apply their
+    own "Not answered" fallback.  For all other types:
+
+    - ``currency`` — ``"£50,000"`` (comma-separated thousands, £ prefix)
+    - ``number`` — whole numbers drop the trailing ``.0``; decimals kept as-is
+    - ``radio`` / ``select`` — returns the matching ``option["label"]``, falls
+      back to the raw value string if no option matches
+    - ``checkbox`` — ``"Yes"`` when truthy (handles ``True``, ``"true"``,
+      ``"yes"``); ``"No"`` otherwise
+    - ``date``, ``textarea``, ``text``, ``file`` — ``str(value)``
+    """
+    if value is None or value == "":
+        return ""
+
+    field_type = field.get("type", "text")
+
+    if field_type == "currency":
+        try:
+            return f"£{int(float(str(value))):,}"
+        except ValueError:
+            return str(value)
+
+    if field_type == "number":
+        try:
+            float_val = float(str(value))
+            return str(int(float_val)) if float_val == int(float_val) else str(float_val)
+        except ValueError:
+            return str(value)
+
+    if field_type in ("radio", "select"):
+        for option in field.get("options") or []:
+            if option.get("value") == value:
+                return option["label"]
+        return str(value)
+
+    if field_type == "checkbox":
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+        if isinstance(value, str):
+            return "Yes" if value.lower() in ("true", "yes", "1") or value.strip() else "No"
+        return "Yes" if value else "No"
+
+    return str(value)
 
 
 # ---------------------------------------------------------------------------

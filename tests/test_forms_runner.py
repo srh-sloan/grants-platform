@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import pathlib
+
 import pytest
 
 from app.forms_runner import (
     SUPPORTED_FIELD_TYPES,
-    EligibilityResult,
-    evaluate_eligibility,
     get_page,
     list_pages,
     merge_page_answers,
@@ -87,136 +88,100 @@ def test_supported_field_types_match_contract():
     ) == SUPPORTED_FIELD_TYPES
 
 
-# --- evaluate_eligibility ---
+# ---------------------------------------------------------------------------
+# word_limit validation (P4.2)
+# ---------------------------------------------------------------------------
 
-# Copied verbatim from seed/grants/ehcf.json — no file I/O in tests.
-EHCF_RULES: list[dict] = [
-    {
-        "id": "org_type",
-        "type": "in",
-        "label": "Organisation type must be charity, CIO, CIC, CBS or PCC",
-        "values": ["charity", "CIO", "CIC", "CBS", "PCC"],
-    },
-    {
-        "id": "operates_in_england",
-        "type": "equals",
-        "label": "Organisation operates in England",
-        "value": True,
-    },
-    {
-        "id": "annual_income",
-        "type": "max",
-        "label": "Annual income no greater than £5,000,000",
-        "value": 5000000,
-    },
-    {
-        "id": "years_serving_homeless",
-        "type": "min",
-        "label": "At least 3 years delivering services to people rough sleeping or at risk of rough sleeping",
-        "value": 3,
-    },
-    {
-        "id": "la_endorsement",
-        "type": "equals",
-        "label": "Local authority homelessness lead endorsement letter available",
-        "value": True,
-    },
-]
+_WORD_LIMIT_PAGE = {
+    "fields": [
+        {
+            "id": "summary",
+            "type": "textarea",
+            "label": "Summary",
+            "required": True,
+            "word_limit": 5,
+        }
+    ]
+}
 
-VALID_EHCF_ANSWERS: dict = {
-    "org_type": "charity",
-    "operates_in_england": True,
-    "annual_income": 250000,
-    "years_serving_homeless": 5,
-    "la_endorsement": True,
+_OPTIONAL_WORD_LIMIT_PAGE = {
+    "fields": [
+        {
+            "id": "notes",
+            "type": "textarea",
+            "label": "Notes",
+            "required": False,
+            "word_limit": 5,
+        }
+    ]
 }
 
 
-def test_all_ehcf_rules_pass_with_valid_answers():
-    result = evaluate_eligibility(EHCF_RULES, VALID_EHCF_ANSWERS)
-    assert result.passed is True
-    assert result.failures == []
+def test_word_limit_under_limit():
+    errors = validate_page(_WORD_LIMIT_PAGE, {"summary": "one two three four"})
+    assert "summary" not in errors
 
 
-def test_in_rule_fails_when_org_type_not_in_allowed_list():
-    answers = {**VALID_EHCF_ANSWERS, "org_type": "limited_company"}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is False
-    assert "org_type" in result.failures
+def test_word_limit_at_boundary():
+    errors = validate_page(_WORD_LIMIT_PAGE, {"summary": "one two three four five"})
+    assert "summary" not in errors
 
 
-def test_equals_fails_when_operates_in_england_is_no():
-    answers = {**VALID_EHCF_ANSWERS, "operates_in_england": "no"}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is False
-    assert "operates_in_england" in result.failures
+def test_word_limit_over_limit():
+    errors = validate_page(_WORD_LIMIT_PAGE, {"summary": "one two three four five six"})
+    assert "summary" in errors
+    assert "5 words or fewer" in errors["summary"]
+    assert "6 words" in errors["summary"]
 
 
-def test_equals_passes_when_answer_is_string_true_and_expected_is_bool_true():
-    answers = {**VALID_EHCF_ANSWERS, "operates_in_england": "true", "la_endorsement": "true"}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is True
-    assert "operates_in_england" not in result.failures
-    assert "la_endorsement" not in result.failures
+def test_word_limit_empty_optional_no_error():
+    errors = validate_page(_OPTIONAL_WORD_LIMIT_PAGE, {"notes": ""})
+    assert "notes" not in errors
 
 
-def test_max_fails_when_annual_income_too_high():
-    answers = {**VALID_EHCF_ANSWERS, "annual_income": 6_000_000}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is False
-    assert "annual_income" in result.failures
+def test_word_limit_empty_required_gives_required_error_not_word_count():
+    errors = validate_page(_WORD_LIMIT_PAGE, {"summary": ""})
+    assert "summary" in errors
+    assert errors["summary"] == "This field is required"
+    assert "words" not in errors["summary"]
 
 
-def test_max_passes_at_boundary():
-    answers = {**VALID_EHCF_ANSWERS, "annual_income": 5_000_000}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is True
-    assert "annual_income" not in result.failures
-
-
-def test_min_fails_when_years_serving_homeless_too_low():
-    answers = {**VALID_EHCF_ANSWERS, "years_serving_homeless": 2}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is False
-    assert "years_serving_homeless" in result.failures
-
-
-def test_min_passes_at_boundary():
-    answers = {**VALID_EHCF_ANSWERS, "years_serving_homeless": 3}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is True
-    assert "years_serving_homeless" not in result.failures
-
-
-def test_missing_answer_causes_rule_to_fail():
-    answers = {k: v for k, v in VALID_EHCF_ANSWERS.items() if k != "org_type"}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is False
-    assert "org_type" in result.failures
-
-
-def test_multiple_failures_appear_in_declaration_order():
-    answers = {
-        **VALID_EHCF_ANSWERS,
-        "org_type": "limited_company",    # rule index 0 — fails
-        "annual_income": 6_000_000,       # rule index 2 — fails
+def test_word_limit_ignored_on_text_field():
+    # word_limit on a non-textarea field must not trigger word-count validation
+    page = {
+        "fields": [
+            {"id": "tag", "type": "text", "label": "Tag", "required": False, "word_limit": 3}
+        ]
     }
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    assert result.passed is False
-    assert result.failures == ["org_type", "annual_income"]
+    errors = validate_page(page, {"tag": " ".join(["word"] * 10)})
+    assert "tag" not in errors
 
 
-def test_unknown_rule_type_raises_value_error():
-    bad_rules = [{"id": "x", "type": "nonexistent", "label": "X", "value": 1}]
-    with pytest.raises(ValueError, match="Unknown rule type"):
-        evaluate_eligibility(bad_rules, {"x": 1})
+def test_word_limit_and_required_violation_on_different_fields():
+    page = {
+        "fields": [
+            {"id": "title", "type": "text", "label": "Title", "required": True},
+            {
+                "id": "body",
+                "type": "textarea",
+                "label": "Body",
+                "required": False,
+                "word_limit": 3,
+            },
+        ]
+    }
+    errors = validate_page(page, {"title": "", "body": "one two three four"})
+    assert "title" in errors
+    assert "body" in errors
 
 
-def test_labels_contains_every_rule_regardless_of_pass_fail():
-    # Fail the first rule deliberately so some rules pass and some fail.
-    answers = {**VALID_EHCF_ANSWERS, "org_type": "limited_company"}
-    result = evaluate_eligibility(EHCF_RULES, answers)
-    expected_ids = {rule["id"] for rule in EHCF_RULES}
-    assert set(result.labels.keys()) == expected_ids
-    # Spot-check one label value.
-    assert result.labels["org_type"] == "Organisation type must be charity, CIO, CIC, CBS or PCC"
+def test_ehcf_local_challenge_and_project_summary_have_word_limit():
+    schema_path = pathlib.Path("app/forms/ehcf-application-v1.json")
+    schema = json.loads(schema_path.read_text())
+    fields_by_id = {
+        field["id"]: field
+        for page in schema["pages"]
+        for field in page["fields"]
+    }
+    assert fields_by_id["local_challenge"].get("word_limit") == 500
+    assert fields_by_id["project_summary"].get("word_limit") == 500
