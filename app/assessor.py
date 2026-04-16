@@ -246,11 +246,9 @@ def _redirect_to_detail(app_id: int):
 def _get_or_create_assessment(application: Application) -> Assessment:
     assessment = Assessment.query.filter_by(application_id=application.id).first()
     if assessment is None:
-        from app.assessor_ai import _get_or_create_ai_user
-        ai_user = _get_or_create_ai_user()
         assessment = Assessment(
             application_id=application.id,
-            assessor_id=ai_user.id,
+            assessor_id=current_user.id,
             scores_json={},
             notes_json={},
         )
@@ -595,6 +593,8 @@ def flag_for_moderation(app_id: int):
         application.status = ApplicationStatus.UNDER_REVIEW
     else:
         flash("Moderation flag removed.", "success")
+        if application.status == ApplicationStatus.UNDER_REVIEW:
+            application.status = ApplicationStatus.SUBMITTED
 
     db.session.commit()
     return _redirect_to_detail(app_id)
@@ -706,6 +706,9 @@ def _call_claude_for_monitoring(prompt: str) -> dict | None:
         max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
+    if not message.content:
+        log.error("Claude returned an empty response for monitoring plan")
+        return None
     raw = message.content[0].text
     return _parse_json_response(raw)
 

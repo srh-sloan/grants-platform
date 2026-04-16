@@ -205,7 +205,7 @@ def _send_notification(assessment: Assessment) -> None:
         {}
 
         Assessed at {} by AI (claude-sonnet-4-6).
-        View application: /assessor/application/{}
+        View application: /assess/{}
     """).strip().format(
         application.id,
         org_name,
@@ -412,9 +412,12 @@ def _process_assessment(application_id: int, assessment_id: int) -> None:
             )
             raise RuntimeError("could not parse Claude response as JSON") from exc
 
-        scores: dict[str, int] = {
-            k: int(v) for k, v in parsed.get("scores", {}).items()
-        }
+        criteria_map = {c["id"]: c for c in criteria}
+        scores: dict[str, int] = {}
+        for k, v in parsed.get("scores", {}).items():
+            if k in criteria_map:
+                max_val = criteria_map[k].get("max", 3)
+                scores[k] = max(0, min(int(v), max_val))
         notes: dict[str, str] = parsed.get("notes", {})
         gap_analysis: str = parsed.get("gap_analysis", "")
         raw_recommendation: str = parsed.get("recommendation", "refer")
