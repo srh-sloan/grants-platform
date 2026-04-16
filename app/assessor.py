@@ -263,11 +263,30 @@ def queue():
             if s and s.recommendation and s.recommendation.value == rec_filter
         ]
 
+    grant_max_totals: dict[int, int] = {}
+    grant_criteria_ids: dict[int, list[str]] = {}
+    for app_obj, _ in rows:
+        gid = app_obj.grant_id
+        if gid not in grant_max_totals and app_obj.grant:
+            criteria = app_obj.grant.config_json.get("criteria", [])
+            grant_max_totals[gid] = max_weighted_total(criteria)
+            grant_criteria_ids[gid] = [c["id"] for c in criteria]
+
+    scored_app_ids: set[int] = set()
+    for app_obj, assessment in rows:
+        if assessment and assessment.scores_json and app_obj.grant_id in grant_criteria_ids:
+            cids = grant_criteria_ids[app_obj.grant_id]
+            if cids and all(c in assessment.scores_json for c in cids):
+                scored_app_ids.add(app_obj.id)
+
     return render_template(
         "assessor/queue.html",
         rows=rows,
         status_filter=status_filter,
         rec_filter=rec_filter,
+        grant_max_totals=grant_max_totals,
+        grant_criteria_ids=grant_criteria_ids,
+        scored_app_ids=scored_app_ids,
     )
 
 
