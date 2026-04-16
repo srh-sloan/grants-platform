@@ -21,6 +21,19 @@ class Config:
     UPLOAD_FOLDER: str = os.environ.get("UPLOAD_FOLDER", str(BASE_DIR / "uploads"))
     MAX_CONTENT_LENGTH: int = 20 * 1024 * 1024  # 20 MB per upload
 
+    # Feature switch for external registry lookups (Charity Commission,
+    # Companies House, etc.). Defaults on in production so new grants can
+    # opt into validators purely via their form schema. Flip off for
+    # offline / airgapped runs.
+    EXTERNAL_VALIDATORS_ENABLED: bool = (
+        os.environ.get("EXTERNAL_VALIDATORS_ENABLED", "1").lower()
+        not in ("0", "false", "no")
+    )
+    # Companies House API key — optional. When unset the Companies House
+    # validator reports itself as "skipped" and the FindThatCharity
+    # aggregator is the sole fall-back.
+    COMPANIES_HOUSE_API_KEY: str | None = os.environ.get("COMPANIES_HOUSE_API_KEY")
+
 
 class TestConfig(Config):
     TESTING = True
@@ -28,3 +41,5 @@ class TestConfig(Config):
     WTF_CSRF_ENABLED = False
     SECRET_KEY = "test-secret"
     UPLOAD_FOLDER: str = str(BASE_DIR / "uploads_test")
+    # Keep tests hermetic: no outbound HTTP unless a specific test opts in.
+    EXTERNAL_VALIDATORS_ENABLED = False

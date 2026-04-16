@@ -2,6 +2,39 @@
 
 All notable changes to the GrantOS grants platform.
 
+## 2026-04-16 — external validators (charity / company number lookup)
+
+### Added
+
+- **Pluggable external-validator framework** (`app/external_validators/`).
+  Any form schema can now opt a field into live lookup against a third-party
+  register by adding an `external_validator: {name, context_fields, ...}`
+  block. The form runner stays pure; the blueprint calls the external layer
+  only after basic required / word-limit checks pass.
+- **FindThatCharityValidator** (default, no API key). Validates UK charity
+  and company registration numbers against findthatcharity.uk, which
+  aggregates Charity Commission E&W, OSCR, CCNI and Companies House into
+  a single Organisation ID namespace (`GB-CHC-`, `GB-SC-`, `GB-NIC-`,
+  `GB-COH-`).
+- **CompaniesHouseValidator** (optional, key-based). Ships registered but
+  reports itself as "skipped" until `COMPANIES_HOUSE_API_KEY` is set —
+  proves out the pluggable pattern and gives a gold-standard fallback.
+- **Feature flag** `EXTERNAL_VALIDATORS_ENABLED` — defaults `on` in
+  production, `off` in `TestConfig` so existing tests keep posting
+  placeholder registration numbers without hitting a network stub.
+- **EHCF schema** — `registration_number` now declares
+  `{"name": "find_that_charity", "context_fields": ["org_type"]}` so the
+  applicant's declared org type steers which UK register is queried first.
+- **Tests** — 31 new tests covering the validators, the page-level runner,
+  the registry, the feature flag, and the applicant-blueprint integration
+  with fake fetchers (no outbound HTTP).
+
+### Engineering notes
+
+- Transport errors (network, 5xx, timeout) yield a `skipped=True` result
+  — we never block an applicant on a provider outage.
+- Stdlib only (`urllib.request`) — no new dependencies.
+
 ## 2026-04-16
 
 ### Added — Claude Code automation suite

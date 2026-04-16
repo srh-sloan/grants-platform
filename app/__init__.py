@@ -51,6 +51,7 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     _register_blueprints(app)
     _register_error_handlers(app)
     _register_cli(app)
+    _register_external_validators(app)
 
     # Auto-seed in dev so `flask run` boots straight into a usable DB. Tests
     # manage their own fixtures, so skip when TESTING is set.
@@ -60,6 +61,25 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     return app
+
+
+def _register_external_validators(app: Flask) -> None:
+    """Re-register validators that need runtime configuration (API keys, etc.).
+
+    The validators ship with sensible defaults — ``FindThatCharity`` works
+    out of the box, ``CompaniesHouse`` skips when it has no key. This hook
+    lets :func:`create_app` swap in credentialled instances when the Flask
+    config carries them, without every grant's form schema needing to know
+    whether ops has configured the secret yet.
+    """
+    from app.external_validators import (
+        CompaniesHouseValidator,
+        register_validator,
+    )
+
+    ch_key = app.config.get("COMPANIES_HOUSE_API_KEY")
+    if ch_key:
+        register_validator(CompaniesHouseValidator(api_key=ch_key))
 
 
 def _install_jinja_loaders(app: Flask) -> None:
