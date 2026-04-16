@@ -7,10 +7,25 @@ administered by MHCLG.
 The goal is a flexible core — so a second or third grant can be added without a rewrite —
 but we're building the first grant end-to-end before generalising.
 
-## Team
+## Team & shape of work
 
-Hackathon, four people, iterative. Small steps, working software at the end of each step,
-merge often.
+**One-day hackathon, four people, iterative MVP.** Our non-negotiables:
+
+- **Iterative** — ship the thinnest vertical slice first, then grow outwards.
+  Every commit should leave `main` runnable. No long-lived branches.
+- **Modular** — four people working in parallel, so the code must split along
+  clean seams (auth, form runner, assessor/scoring, platform/data). Cross-stream
+  contracts (schema shape, status enum, grant config keys) are pinned in
+  Phase 0 and not silently changed.
+- **Innovative** — the point of the day isn't CRUD; it's proving that a
+  JSON-defined, grant-agnostic core can absorb a second (and third) grant
+  without a rewrite. Optimise choices for that demo.
+- **MVP, not V1.** If a feature is only needed for the second grant, defer it.
+  If a feature is polish, defer it. "Working software end-to-end" beats "one
+  feature done beautifully" every time today.
+
+If you can't demo a change by the end of your current loop, it's too big —
+carve a smaller slice.
 
 ## Scope (v0)
 
@@ -21,7 +36,7 @@ merge often.
 
 ## Stack
 
-Kept deliberately boring so we can ship in a weekend.
+Kept deliberately boring so we can ship in a day.
 
 | Layer | Choice |
 |---|---|
@@ -86,9 +101,29 @@ CLAUDE.md           ← longer-form context for the AI pair
    gives us chronological order and later ideas visibly follow earlier ones.
    See `ideas/README.md`.
 2. **Synthesise.** We read each other's ideas, pick a shape for v0, agree the
-   JSON form schema, and split the work.
-3. **Iterate.** Ship the thinnest vertical slice first (one applicant can create an
-   account, fill one page, save a draft), then expand.
+   JSON form schema and the grant config shape, and split the work along the
+   four streams in `PLAN.md`.
+3. **Iterate in thin slices.** Ship the thinnest vertical slice first (one
+   applicant can create an account, fill one page, save a draft), demo it,
+   then expand. Each phase in `PLAN.md` ends with a demoable slice — don't
+   start the next phase until the current one demos.
+4. **Merge often.** Small PRs, trunk-based. If you're blocked waiting on
+   another stream, stub the contract (an empty function, a fake status) and
+   keep moving.
+
+## Working with Claude (AI pair)
+
+Claude is a fifth pair of hands today. To keep its output consistent across
+all four streams, every prompt should be able to assume Claude has read:
+
+- `README.md` — what we agreed (this file)
+- `PLAN.md` — what to build next, in which stream
+- `CLAUDE.md` — the working patterns and conventions to follow
+
+**`CLAUDE.md` contains the binding style/pattern rules for AI contributions.**
+If Claude's output contradicts a rule there, that's a bug — fix the output,
+not the rule (unless the team agrees the rule is wrong, in which case change
+it once, in `CLAUDE.md`, so every future prompt picks it up).
 
 ## Getting started (once code exists)
 

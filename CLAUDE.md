@@ -6,6 +6,33 @@ reference material and working context. `PLAN.md` holds the feature
 catalogue, phase ordering, and parallel-stream breakdown — consult it before
 picking up work so you don't duplicate another stream or jump phases.
 
+## Read this first (operating mode)
+
+This is a **one-day, four-person hackathon** building an **iterative, modular,
+innovative MVP**. Your job as AI pair is to produce code and docs that look
+like they were written by one team, not five individuals on different days.
+That means following the patterns in this file even when a different approach
+would be locally simpler.
+
+Before acting on any task:
+
+1. **Locate the task in `PLAN.md`.** Which phase? Which stream? If you can't
+   place it, ask — don't guess. Don't start phase N+1 work while phase N is
+   unfinished.
+2. **Pick the thinnest slice that demos.** If the prompt implies a full
+   feature, propose a thin slice first and confirm. "One page, one field, one
+   grant, happy path" beats half-built breadth.
+3. **Prefer config over code.** If the change would hardcode grant-specific
+   behaviour (EHCF weights, EHCF eligibility, EHCF field labels) into Python
+   or templates, stop. It belongs in `grants.config_json` or
+   `forms.schema_json`.
+4. **Respect stream boundaries.** Each stream owns a set of files (see
+   `PLAN.md` → Parallelisation summary). If a task needs a file outside your
+   stream, prefer adding to a contract (e.g. a model column, a helper
+   function) over reaching across and restructuring someone else's code.
+5. **Leave `main` runnable.** Every commit should boot the app and pass
+   `pytest`. If a change can't land atomically, land a stub first.
+
 ## Project Overview
 
 A flexible grants application and assessment system. First grant onboarded:
@@ -278,3 +305,181 @@ FLASK_SECRET_KEY=
 DATABASE_URL=sqlite:///grants.db      # or the Flask config equivalent
 UPLOAD_FOLDER=uploads/
 ```
+
+---
+
+## Working patterns for Claude (binding conventions)
+
+These are the **generic patterns every AI contribution must follow** so that
+code produced across the four parallel streams looks like one codebase.
+Deviations should be flagged up and agreed with the team, not slipped in.
+
+### 1. MVP mindset
+
+- **Smallest runnable slice wins.** If in doubt, hardcode a value, stub a
+  branch, or fake a return — get the slice green, then iterate.
+- **No speculative generality.** Don't add config knobs, plugin hooks, or
+  abstract base classes "for later". The second grant in Phase 4 will teach
+  us what's actually shared.
+- **No polish passes on unfinished phases.** Formatting a file Claude didn't
+  touch this task is out of scope; fixing unrelated bugs is out of scope.
+- **When unsure, propose then build.** For anything beyond a one-file change,
+  sketch the plan in one paragraph, get a nod, then code.
+
+### 2. File & directory conventions
+
+- **Python files:** `snake_case.py`. Blueprints live at `app/<name>.py`
+  (`auth.py`, `applicant.py`, `assessor.py`, `forms_runner.py`, `scoring.py`).
+- **Templates:** `app/templates/<blueprint>/<action>.html`
+  (e.g. `applicant/dashboard.html`, `assessor/score.html`). Shared chrome in
+  `app/templates/partials/`. Always extend `base.html`.
+- **Static assets:** `app/static/` (flat). GOV.UK bundle files keep their
+  upstream names.
+- **JSON form schemas:** `app/forms/<grant-slug>-<kind>-v<n>.json`
+  (e.g. `ehcf-application-v1.json`, `ehcf-assessment-v1.json`). Lowercase,
+  hyphen-separated, versioned from day one.
+- **Grant config:** `seed/grants/<grant-slug>.json`. Same slug everywhere.
+- **Tests:** `tests/test_<module>.py`, one per module under test. Shared
+  fixtures in `tests/conftest.py`.
+- **Ideas and decisions:** drop into `ideas/` using the timestamp prefix
+  from `ideas/README.md`. Don't edit someone else's idea file — write a new
+  one that references it.
+
+### 3. Python code style
+
+- **Python 3.12+**, type hints on all new function signatures and public
+  attributes. Internal locals don't need annotations unless non-obvious.
+- **Formatting:** 4-space indent, PEP 8, double-quoted strings. Keep lines
+  under ~100 chars; wrap long expressions with parentheses, not backslashes.
+- **Imports:** stdlib → third-party → local, blank line between groups. No
+  wildcard imports.
+- **Docstrings:** only for modules and for functions whose behaviour isn't
+  obvious from the name + types. One-line triple-quoted is fine; full
+  Google/Numpy style is overkill today.
+- **No comments restating the code.** Comment the *why* when a choice is
+  non-obvious (e.g. "weight applied as percentage of max, not raw score").
+- **Errors:** raise specific exceptions at boundaries (input validation,
+  DB constraints). Don't wrap internal calls in try/except to mask bugs.
+  Let Flask's error handling surface them in dev.
+- **No I/O in pure helpers.** `scoring.py`, validators, and schema walkers
+  stay pure — they take data in, return data out. DB and filesystem access
+  belong in blueprints or a thin persistence layer.
+
+### 4. Flask patterns
+
+- **App factory** (`create_app()`) in `app/__init__.py`. No module-level
+  `app = Flask(__name__)`. Extensions initialised against the app inside
+  the factory.
+- **Blueprints per concern**, registered in the factory. URL prefixes:
+  `/` (public), `/auth`, `/apply`, `/assess`. Never cross-import blueprint
+  route functions — share via models or helper modules.
+- **Route naming:** `snake_case` Python function names map to kebab-case
+  URL paths (`def application_review` → `/apply/<id>/review`). `url_for`
+  always; never hand-build a URL.
+- **Session-based auth** via Flask-Login. Every non-public route is gated
+  with `@login_required` and, where relevant, a role check decorator
+  (`@applicant_required`, `@assessor_required`). Write the decorators
+  once, in `app/auth.py`, reuse everywhere.
+- **CSRF on every POST.** Flask-WTF for login/register/scoring forms gives
+  this for free. For JSON-driven applicant pages, render a CSRF token
+  into the page and validate it in `forms_runner.py`.
+
+### 5. Data patterns
+
+- **One place for grant-specific truth:** `grants.config_json`. Read it,
+  don't duplicate it. If you find yourself about to copy a weight or a
+  threshold into Python, rewrite the call site to read from config.
+- **One place for form shape:** `forms.schema_json`. The form runner walks
+  this; views never know what fields exist. Adding a field = editing JSON,
+  not Python.
+- **Status enums are centralised.** Define `ApplicationStatus` once in
+  `models.py`; import it everywhere. Same for `AssessmentRecommendation`,
+  `UserRole`. No stringly-typed status checks in views.
+- **IDs are strings where they cross the JSON boundary** (criterion IDs,
+  field IDs, page IDs). Numeric DB IDs stay inside SQLAlchemy.
+- **Migrations:** defer Alembic until the schema settles; until then,
+  destructive resets via `seed.py` are fine. Once Alembic is in, every
+  model change ships with a migration in the same PR.
+
+### 6. JSON schema & grant config contracts
+
+These shapes are **cross-stream contracts** — if you change them, announce
+it and update every consumer in the same commit.
+
+- **Form schema:** `{id, version, pages: [{id, title, fields: [{id, type,
+  label, required, ...}]}]}`. Field `type` is one of: `text`, `textarea`,
+  `radio`, `checkbox`, `select`, `number`, `currency`, `date`, `file`. New
+  field types need a runner handler *and* a macro.
+- **Grant config:** `{slug, name, status, eligibility: [...], criteria:
+  [{id, label, weight, max, auto_reject_on_zero}], award_ranges: {...},
+  timeline: {...}}`. Weights sum to 100.
+- **Answers payload:** `{page_id: {field_id: value}}`. Drafts and
+  submissions use the same shape — `status` distinguishes them.
+- **Scores payload:** `{criterion_id: int}` and notes `{criterion_id:
+  str}`. Keys must match `criteria[].id` exactly.
+
+### 7. Templates (GOV.UK)
+
+- Always extend `base.html`. Put page-specific `<title>` in a `{% block
+  title %}`; never inline a new `<html>` tag.
+- Use GOV.UK macros for inputs, buttons, error summaries. Don't write raw
+  `<input class="govuk-input">` — it drifts from the design system on
+  upgrade.
+- Error summary at the top of any form page on validation failure; the
+  runner provides one, reuse it.
+- No inline CSS or JS. If styling is needed beyond GOV.UK defaults, add
+  to a single `app/static/app.css`.
+
+### 8. Tests
+
+- Every merged phase slice ships with at least **one smoke test** exercising
+  the happy path end-to-end. Failure cases come later.
+- Use `pytest` + Flask's `test_client`. Fixtures for `app`, `client`, a
+  seeded applicant user, a seeded assessor user — all in `conftest.py`.
+- Test data: reuse the EHCF seed; don't invent parallel fixtures unless
+  a test specifically needs a shape EHCF doesn't have.
+- Don't test framework code (that Flask routes work, that SQLAlchemy
+  saves). Test *our* logic: scoring math, eligibility rules, form
+  validation, status transitions.
+
+### 9. Commits, branches, PRs
+
+- **Branch per stream/task**, short-lived, merged to `main` the same day.
+  No long-running feature branches.
+- **Commit messages:** imperative mood, under 72 chars, e.g.
+  `add applicant dashboard skeleton`, `read scoring weights from grant
+  config`. Body only if the *why* isn't obvious.
+- **One logical change per commit.** If you did two things, make two
+  commits.
+- **PRs are small.** A PR that touches >10 files or >400 lines of
+  non-generated code should be split unless it's seed/migration data.
+- Never push to `main` directly; never force-push a shared branch.
+
+### 10. When to stop and ask
+
+Pause and ask the team / user before:
+
+- Introducing a new dependency (anything not already in `pyproject.toml`).
+- Changing a cross-stream contract (schema shape, grant config keys,
+  status enum, DB column types).
+- Deleting or renaming a file that another stream imports.
+- Adding a feature that isn't in the current phase of `PLAN.md`.
+- Shipping anything that makes `main` not boot or `pytest` not pass.
+
+For anything else: decide, do, commit, move on.
+
+### 11. What "done" looks like for a Claude task
+
+Before reporting a task complete, Claude must:
+
+1. Have the app boot (`flask --app app run`) without import errors.
+2. Have `pytest` pass (or state explicitly which tests were added/skipped
+   and why).
+3. Have touched only files within the task's stream (or have flagged the
+   cross-stream edit and why it was necessary).
+4. Have updated `PLAN.md` if a feature from the catalogue is now done,
+   partially done, or consciously punted.
+5. Have a commit message that names the phase/stream touched.
+
+If any of those can't be satisfied, say so plainly — "I got X working but
+Y is broken" is more useful than a green-tick summary that hides the gap.
