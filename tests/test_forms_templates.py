@@ -187,3 +187,99 @@ def test_form_action_attribute_contains_action_url(app):
     action = "/apply/42/my-page"
     html = _render(app, page, action_url=action)
     assert action in html
+
+
+# ---------------------------------------------------------------------------
+# Conditional visibility (P4.3)
+# ---------------------------------------------------------------------------
+
+
+def test_conditional_field_hidden_when_condition_not_met(app):
+    """A field with visible_when should not render when the condition is false."""
+    page = {
+        "id": "p1",
+        "title": "Funding",
+        "fields": [
+            {
+                "id": "funding_type",
+                "type": "radio",
+                "label": "Funding type",
+                "required": True,
+                "options": [
+                    {"value": "revenue", "label": "Revenue only"},
+                    {"value": "capital", "label": "Capital only"},
+                ],
+            },
+            {
+                "id": "capital_readiness",
+                "type": "textarea",
+                "label": "Describe your capital readiness",
+                "required": True,
+                "visible_when": {
+                    "field": "funding_type",
+                    "operator": "in",
+                    "value": ["capital", "both"],
+                },
+            },
+        ],
+    }
+    # When funding_type is "revenue", the conditional field should be hidden.
+    html = _render(app, page, answers={"funding_type": "revenue"})
+    assert "Describe your capital readiness" not in html
+
+
+def test_conditional_field_shown_when_condition_met(app):
+    """A field with visible_when should render when the condition is true."""
+    page = {
+        "id": "p1",
+        "title": "Funding",
+        "fields": [
+            {
+                "id": "funding_type",
+                "type": "radio",
+                "label": "Funding type",
+                "required": True,
+                "options": [
+                    {"value": "revenue", "label": "Revenue only"},
+                    {"value": "capital", "label": "Capital only"},
+                ],
+            },
+            {
+                "id": "capital_readiness",
+                "type": "textarea",
+                "label": "Describe your capital readiness",
+                "required": True,
+                "visible_when": {
+                    "field": "funding_type",
+                    "operator": "in",
+                    "value": ["capital", "both"],
+                },
+            },
+        ],
+    }
+    # When funding_type is "capital", the conditional field should be shown.
+    html = _render(app, page, answers={"funding_type": "capital"})
+    assert "Describe your capital readiness" in html
+
+
+def test_conditional_field_hidden_when_no_answers(app):
+    """A conditional field is hidden when answers dict is empty."""
+    page = {
+        "id": "p1",
+        "title": "Funding",
+        "fields": [
+            {
+                "id": "capital_readiness",
+                "type": "textarea",
+                "label": "Describe your capital readiness",
+                "required": True,
+                "visible_when": {
+                    "field": "funding_type",
+                    "operator": "in",
+                    "value": ["capital", "both"],
+                },
+            },
+        ],
+    }
+    html = _render(app, page, answers={})
+    assert "Describe your capital readiness" not in html

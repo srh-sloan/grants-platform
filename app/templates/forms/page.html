@@ -58,6 +58,21 @@
 
         {% for field in page.fields %}
 
+          {# --- Conditional visibility (P4.3): evaluate visible_when --- #}
+          {% set show_field = true %}
+          {% if field.visible_when is defined and field.visible_when %}
+            {% set vw = field.visible_when %}
+            {% set trigger_val = answers.get(vw.field) if answers else none %}
+            {% if vw.operator == "in" %}
+              {% set show_field = trigger_val in vw.value %}
+            {% elif vw.operator == "equals" %}
+              {% set show_field = trigger_val == vw.value %}
+            {% elif vw.operator == "not_equals" %}
+              {% set show_field = trigger_val != vw.value %}
+            {% endif %}
+          {% endif %}
+
+          {% if show_field %}
           {# Resolve any existing answer and error for this field. #}
           {% set field_value = answers.get(field.id, "") %}
           {% set field_error = errors.get(field.id) %}
@@ -171,6 +186,8 @@
             }) }}
 
           {% endif %}
+
+          {% endif %}{# end show_field #}
 
         {% endfor %}
 
