@@ -7,6 +7,14 @@ administered by MHCLG.
 The goal is a flexible core — so a second or third grant can be added without a rewrite —
 but we're building the first grant end-to-end before generalising.
 
+## The problem we're solving
+
+Applying for a grant is hard. Applicants — often small voluntary or community organisations with limited capacity — must interpret dense policy documents, understand complex eligibility rules, and translate their work into the specific language assessors want to see. The result is that good projects get rejected because the application wasn't written well, not because the work wasn't fundable.
+
+On the other side, assessors face the inverse burden: reading through large volumes of inconsistent, free-text applications, manually cross-referencing answers against criteria, and reconciling data spread across documents to reach a funding decision. This is slow, cognitively draining, and introduces inconsistency.
+
+We're building a platform that uses AI to reduce both burdens. For applicants, the system provides guided, structured input — helping them express what they actually do in a way that maps cleanly to the assessment criteria. For assessors, it aggregates application data into a clear, comparable view and uses AI-assisted scoring to surface signal from noise — so staff spend their time on judgement, not data wrangling.
+
 ---
 
 ## Quick start
