@@ -3,11 +3,33 @@
 What we need to build, in what order, and what can happen in parallel.
 
 - `README.md` — what the team has agreed (stack, shape, how we work)
-- `CLAUDE.md` — deeper architecture notes / AI working context
+- `CLAUDE.md` — deeper architecture notes / AI working patterns
 - `PLAN.md` (this file) — the feature catalogue and sequencing
 
 All five prospectuses in `refs/` informed this. Changes to scope should be
 reflected here; changes to tech/process in `README.md`.
+
+## Ground rules for this plan
+
+This plan is optimised for a **one-day, four-person hackathon** and assumes an
+**iterative, modular, innovative MVP** posture:
+
+- **Iterative** — phases are sized so each one ends in a demoable thin slice.
+  Don't start phase N+1 until phase N demos; don't polish phase N once it
+  demos.
+- **Modular** — the parallelisation table below carves the code into four
+  streams with minimal overlap. Stay in your stream; cross a stream boundary
+  only via a contract already pinned in Phase 0 (schema, status enum, grant
+  config).
+- **Innovative** — the differentiator is the JSON-defined, grant-agnostic
+  core. Any feature that would hardcode EHCF shapes into Python is a
+  regression even if it ships faster today.
+- **MVP** — if a row is in "v1" or "Deferred" below, it does not get built
+  today. Resist scope creep mid-phase; capture the idea in `ideas/` and
+  carry on.
+
+When picking the next task: pull from the earliest unfinished phase in your
+stream, smallest slice first.
 
 ---
 
@@ -224,3 +246,23 @@ A phase is done when:
 2. A smoke test exercises the happy path.
 3. This file is updated — tick features off the catalogue, note anything we
    punted, record any decisions that contradict earlier plan entries.
+
+A phase is **not** done just because the code is written. If it doesn't demo,
+it's not done; if it demos but isn't merged to `main`, it's not done; if it's
+merged but nobody else's stream can build on it, it's not done.
+
+## MVP reminders (read before picking up work)
+
+- **Thin slice over full feature.** One applicant, one page, one grant, one
+  assessor, one score — then iterate. Full coverage is a phase 4 problem.
+- **Config, not code.** If you're about to write `if grant.slug == "ehcf"`,
+  stop — that belongs in `grants.config_json` or `forms.schema_json`.
+- **Stub the cross-stream contract.** If your stream needs something another
+  stream owns, land an empty function / fake data / TODO marker with the
+  agreed signature, then unblock yourself. Don't re-implement the other
+  stream's work.
+- **Commit every green slice.** Small commits, often. If you've been heads-down
+  for an hour without pushing, you're too deep.
+- **Prefer deleting scope over delaying a phase.** Cutting a field, skipping
+  a page, or hardcoding one screen is fine if it keeps the phase on track —
+  flag it in this file under the phase so it doesn't get lost.
