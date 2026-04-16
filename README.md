@@ -4,16 +4,90 @@ A prototype grants application and assessment system. First grant onboarded: the
 [Ending Homelessness in Communities Fund (EHCF)](https://www.gov.uk/guidance/ending-homelessness-in-communities-fund-prospectus)
 administered by MHCLG.
 
-The goal is a flexible core — so a second or third grant can be added without a rewrite —
+The goal is a flexible core -- so a second or third grant can be added without a rewrite --
 but we're building the first grant end-to-end before generalising.
 
 ## The problem we're solving
 
-Applying for a grant is hard. Applicants — often small voluntary or community organisations with limited capacity — must interpret dense policy documents, understand complex eligibility rules, and translate their work into the specific language assessors want to see. The result is that good projects get rejected because the application wasn't written well, not because the work wasn't fundable.
+Applying for a grant is hard. Applicants -- often small voluntary or community organisations
+with limited capacity -- must interpret dense policy documents, understand complex eligibility
+rules, and translate their work into the specific language assessors want to see. The result
+is that good projects get rejected because the application was not written well, not because
+the work was not fundable.
 
-On the other side, assessors face the inverse burden: reading through large volumes of inconsistent, free-text applications, manually cross-referencing answers against criteria, and reconciling data spread across documents to reach a funding decision. This is slow, cognitively draining, and introduces inconsistency.
+On the other side, assessors face the inverse burden: reading through large volumes of
+inconsistent, free-text applications, manually cross-referencing answers against criteria,
+and reconciling data spread across documents to reach a funding decision. This is slow,
+cognitively draining, and introduces inconsistency.
 
-We're building a platform that uses AI to reduce both burdens. For applicants, the system provides guided, structured input — helping them express what they actually do in a way that maps cleanly to the assessment criteria. For assessors, it aggregates application data into a clear, comparable view and uses AI-assisted scoring to surface signal from noise — so staff spend their time on judgement, not data wrangling.
+We are building a platform that uses AI to reduce both burdens. For applicants, the system
+provides guided, structured input -- helping them express what they actually do in a way that
+maps cleanly to the assessment criteria. For assessors, it aggregates application data into a
+clear, comparable view and uses AI-assisted scoring to surface signal from noise -- so staff
+spend their time on judgement, not data wrangling.
+
+---
+
+## AI assessment layer
+
+The platform uses **Claude (claude-sonnet-4-6)** to automatically assess every submitted
+application. This runs immediately after the applicant clicks Submit, without any assessor
+intervention.
+
+### What it does
+
+1. Reads the applicant's answers from `Application.answers_json`
+2. Reads the grant's scoring criteria from `grant.config_json["criteria"]`
+3. Sends a structured prompt to Claude asking it to score each criterion and explain its
+   reasoning
+4. Writes the result back to `Assessment.scores_json`, `Assessment.notes_json`,
+   `weighted_total`, and `recommendation`
+5. Emails `ross.mckelvie@fylde.gov.uk` (or `NOTIFY_EMAIL`) with the full result
+
+The AI assessment is **idempotent** -- re-submitting the same application produces no
+duplicate rows. It is also **non-blocking** -- if the Anthropic API is unavailable or returns
+unparseable output, the submission still succeeds and the error is logged.
+
+A synthetic system user (`ai-assessor@system.local`) is upserted automatically to satisfy
+the non-nullable `assessor_id` foreign key. This account has an unusable password hash and
+cannot log in.
+
+### Assessor workflow
+
+Once the AI assessment runs, assessors can:
+
+1. Sign in and view the **queue** at `/assess/` -- all submitted applications with status
+   and AI recommendation filters
+2. Open an **application detail** at `/assess/<id>` -- see the applicant's answers alongside
+   the AI scores and rationale
+3. **Override scores** manually using the scoring form (one score + mandatory notes per
+   criterion)
+4. **Flag for moderation** -- marks the application for a second assessor review
+5. **Record a decision** (fund / reject / refer) -- updates the application status and sends
+   an outcome notification email to the applicant
+6. View the **allocation dashboard** at `/assess/allocation` -- all applications ranked by
+   weighted score with a running cumulative total against the fund budget
+
+### Scoring model
+
+Scores are grant-agnostic. The criteria, weights, and auto-reject rules all live in
+`seed/grants/<slug>.json` under `criteria`. Changing the grant config changes the scoring
+without touching Python.
+
+```json
+{
+  "criteria": [
+    {"id": "skills", "label": "Skills and experience", "weight": 10, "max": 3, "auto_reject_on_zero": true},
+    {"id": "proposal2", "label": "Proposal -- project alignment", "weight": 30, "max": 3, "auto_reject_on_zero": true}
+  ]
+}
+```
+
+`weighted_total = sum(score * weight for each criterion)`. Maximum for EHCF is 300 (all
+criteria scored 3, weights sum to 100).
+
+Auto-reject: if any criterion flagged `auto_reject_on_zero` scores 0, the recommendation is
+forced to `reject` regardless of the total.
 
 ---
 
@@ -21,12 +95,10 @@ We're building a platform that uses AI to reduce both burdens. For applicants, t
 
 You need **one** of these installed:
 
-- **[uv](https://docs.astral.sh/uv/)** (recommended — manages Python + deps for you), or
+- **[uv](https://docs.astral.sh/uv/)** (recommended -- manages Python + deps for you), or
 - **Docker + Docker Compose**.
 
-Pick whichever you have. Both start from a clean clone; no other setup needed.
-
-### Option A — uv (fastest inner loop)
+### Option A -- uv (fastest inner loop)
 
 ```bash
 # One-time: install uv (if you don't have it)
@@ -45,10 +117,7 @@ uv run flask --app wsgi run --debug
 uv run pytest
 ```
 
-That's it. `uv sync` is idempotent — re-running it after a `git pull` brings
-your env back in sync with `uv.lock`.
-
-### Option B — Docker Compose (one command, zero host deps)
+### Option B -- Docker Compose (one command, zero host deps)
 
 ```bash
 # Build and start (prod-ish: gunicorn on :8000, data persisted in a Docker volume)
@@ -64,9 +133,6 @@ docker compose down
 docker compose down -v
 ```
 
-The container seeds the DB on first boot. Hit <http://127.0.0.1:8000/> (prod)
-or <http://127.0.0.1:5000/> (dev).
-
 ### Common dev tasks
 
 | Task | Command |
@@ -80,19 +146,23 @@ or <http://127.0.0.1:5000/> (dev).
 | Auto-fix lint | `uv run ruff check . --fix` |
 | Reset the DB | `rm grants.db && uv run python seed.py` |
 | Reset inside Docker | `docker compose run --rm web python seed.py --reset` |
-| Shell inside the container | `docker compose run --rm web sh` |
-| Health check | `curl http://127.0.0.1:8000/healthz` |
 
 ### Environment variables
 
-Defaults work out of the box for local dev. Override via `.env` (gitignored) or
-inline before the command.
+Defaults work for local dev. Override via `.env` (gitignored) or inline.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `FLASK_SECRET_KEY` | `dev-secret-change-me` | **Must** be overridden for anything shared. |
-| `DATABASE_URL` | `sqlite:///grants.db` | Change to Postgres URL if we outgrow SQLite. |
-| `UPLOAD_FOLDER` | `./uploads/` | Where applicant docs land. |
+| `FLASK_SECRET_KEY` | `dev-secret-change-me` | Must be overridden for anything shared |
+| `DATABASE_URL` | `sqlite:///grants.db` | Switch to a Postgres URL for production |
+| `UPLOAD_FOLDER` | `./uploads/` | Where applicant documents are stored |
+| `ANTHROPIC_API_KEY` | _(none)_ | Required for AI assessment. Get one at console.anthropic.com |
+| `NOTIFY_EMAIL` | `ross.mckelvie@fylde.gov.uk` | Recipient for AI assessment result emails |
+| `SMTP_HOST` | `localhost` | SMTP server for outbound email |
+| `SMTP_PORT` | `587` | Use 465 for SMTP_SSL |
+| `SMTP_USER` | _(none)_ | SMTP username (optional) |
+| `SMTP_PASSWORD` | _(none)_ | SMTP password (optional) |
+| `SMTP_FROM` | `grants-platform@noreply.local` | Sender address for outbound email |
 
 ---
 
@@ -100,67 +170,53 @@ inline before the command.
 
 ```
 .
-├── app/                          ← Flask app (factory pattern)
-│   ├── __init__.py               ← create_app(), pre-registers blueprints
-│   ├── extensions.py             ← db, login_manager, csrf singletons
-│   ├── models.py                 ← SQLAlchemy models + shared enums (Stream D)
-│   ├── public.py                 ← landing page, /healthz, GOV.UK assets (Stream D)
-│   ├── auth.py                   ← login/register + role decorators (Stream A)
-│   ├── applicant.py              ← /apply routes (Stream A)
-│   ├── assessor.py               ← /assess routes (Stream C)
-│   ├── forms_runner.py           ← JSON form runner, pure helpers (Stream B)
-│   ├── scoring.py                ← weighted-total + auto-reject (Stream C)
-│   ├── forms/                    ← JSON form definitions per grant
-│   ├── templates/                ← Jinja templates, extends GOV.UK Frontend
-│   └── static/                   ← GOV.UK Frontend CSS/JS + fonts/images
-├── seed/grants/                  ← Grant configs loaded by seed.py
-├── tests/                        ← pytest suite
-├── wsgi.py                       ← entry point for gunicorn + flask --app wsgi
-├── config.py                     ← Config / TestConfig
-├── seed.py                       ← Loads grants + forms from disk into the DB
-├── Dockerfile                    ← uv-based multi-stage image
-├── docker-compose.yml            ← Prod + dev profiles
-├── pyproject.toml                ← Project metadata, deps, ruff + pytest config
-├── uv.lock                       ← Locked deps (checked in, managed by uv)
-├── CLAUDE.md                     ← Working patterns for AI contributions
-├── CONTRIBUTING.md               ← Stream ownership + merge-conflict avoidance
-└── PLAN.md                       ← Feature catalogue + phase ordering
+├── app/
+│   ├── __init__.py               -- create_app(), pre-registers blueprints
+│   ├── extensions.py             -- db, login_manager, csrf singletons
+│   ├── models.py                 -- SQLAlchemy models + shared enums (Stream D)
+│   ├── public.py                 -- landing page, /healthz, GOV.UK assets (Stream D)
+│   ├── auth.py                   -- login/register + role decorators (Stream A)
+│   ├── applicant.py              -- /apply routes (Stream A)
+│   ├── assessor.py               -- /assess routes + AI assessment (Stream C)
+│   ├── assessor_ai.py            -- Claude-powered auto-scoring (Stream C)
+│   ├── forms_runner.py           -- JSON form runner, pure helpers (Stream B)
+│   ├── scoring.py                -- weighted-total + auto-reject helpers (Stream C)
+│   ├── uploads.py                -- document upload/download (Stream D)
+│   ├── forms/                    -- JSON form schemas per grant
+│   ├── templates/                -- Jinja templates, extends GOV.UK Frontend
+│   └── static/                   -- GOV.UK Frontend CSS/JS + fonts/images
+├── seed/grants/                  -- Grant configs loaded by seed.py
+├── tests/                        -- pytest suite
+├── wsgi.py                       -- Entry point for gunicorn + flask --app wsgi
+├── config.py                     -- Config / TestConfig
+├── seed.py                       -- Loads grants + forms from disk into the DB
+├── Dockerfile                    -- uv-based multi-stage image
+├── docker-compose.yml            -- Prod + dev profiles
+├── pyproject.toml                -- Project metadata, deps, ruff + pytest config
+├── uv.lock                       -- Locked deps (checked in, managed by uv)
+├── CLAUDE.md                     -- Working patterns for AI contributions
+├── CONTRIBUTING.md               -- Stream ownership + merge-conflict avoidance
+└── PLAN.md                       -- Feature catalogue + phase ordering
 ```
 
 ## Working in parallel
 
-Four people, one day. **Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before you
-start** — it lists which files each stream owns and the pinned cross-stream
-contracts. The short version:
+Four streams, one day. Read [CONTRIBUTING.md](CONTRIBUTING.md) before you start.
 
-- **Stream A (Auth + applicant UX)** → `app/auth.py`, `app/applicant.py`
-- **Stream B (Form runner)** → `app/forms_runner.py`, `app/forms/*.json`
-- **Stream C (Assessor + scoring)** → `app/assessor.py`, `app/scoring.py`
-- **Stream D (Platform + data)** → `app/models.py`, `seed.py`, `config.py`,
-  Docker, static assets
+| Stream | Owns | Key files |
+|---|---|---|
+| A -- Auth + applicant UX | Login, register, application journey | `app/auth.py`, `app/applicant.py` |
+| B -- Form runner | JSON schema rendering, eligibility | `app/forms_runner.py`, `app/forms/*.json` |
+| C -- Assessor + scoring | Queue, scoring, AI assessment, decisions | `app/assessor.py`, `app/assessor_ai.py`, `app/scoring.py` |
+| D -- Platform + data | Models, seed, Docker, static assets | `app/models.py`, `seed.py`, `config.py` |
 
-If another stream hasn't shipped the symbol you need, import the stub — it'll
-raise `501` or `NotImplementedError` at runtime but your tests still run.
-
-## Ground rules
-
-- **Iterative** — thin vertical slice first, then expand. Every commit leaves
-  `main` runnable (`uv run flask --app wsgi run` boots, `uv run pytest` passes).
-- **Modular** — stay inside your stream's files. Cross-stream contracts
-  (schema shapes, status enums, URL prefixes) are pinned in Phase 0 and only
-  change with team agreement.
-- **Innovative** — the differentiator is the **JSON-defined, grant-agnostic**
-  core. Anything that hardcodes EHCF shapes into Python is a regression.
-- **MVP, not V1** — if a feature is only needed for the second grant, defer
-  it. Working end-to-end beats any single feature done beautifully.
-
-If a change can't demo by the end of your loop, it's too big — carve a
-smaller slice.
+Cross-stream contracts (schema shapes, status enums, URL prefixes) are pinned in Phase 0 and
+only change with team agreement.
 
 ## JSON forms
 
-Non-developers can design forms without touching Python. A form is a JSON
-file; the Flask app (`app/forms_runner.py`) is a generic runner over it.
+Non-developers can design forms without touching Python. A form is a JSON file in
+`app/forms/`; the Flask app (`app/forms_runner.py`) is a generic runner over it.
 
 ```json
 {
@@ -180,38 +236,36 @@ file; the Flask app (`app/forms_runner.py`) is a generic runner over it.
 }
 ```
 
-Supported field types are frozen: `text`, `textarea`, `radio`, `checkbox`,
-`select`, `number`, `currency`, `date`, `file`. Adding one is a Stream B
-change (new runner handler + new Jinja macro).
+Supported field types: `text`, `textarea`, `radio`, `checkbox`, `select`, `number`,
+`currency`, `date`, `file`.
+
+## Adding a second grant
+
+1. Create `seed/grants/<slug>.json` with the grant config (eligibility, criteria, award ranges)
+2. Create `app/forms/<slug>-application-v1.json` with the form schema
+3. Run `uv run python seed.py` -- the grant appears in the platform automatically
+4. No Python changes required
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Language | Python 3.12 (pinned via `.python-version`) |
-| Package / env manager | [uv](https://docs.astral.sh/uv/) |
+| Language | Python 3.12 |
+| Package manager | uv |
 | Web framework | Flask 3 |
-| Database | SQLite (single file, zero-config; Postgres later if needed) |
+| Database | SQLite (dev) / Postgres (prod) |
 | ORM | SQLAlchemy 2.0 via Flask-SQLAlchemy |
 | Auth | Flask-Login + werkzeug password hashing |
-| Forms | JSON schemas for applicant forms; WTForms for static forms (login, scoring) |
-| Templates | Jinja2 + GOV.UK Frontend (vendored CSS/JS + jinja macros) |
+| CSRF | Flask-WTF CSRFProtect |
+| Templates | Jinja2 + GOV.UK Frontend Jinja macros |
+| AI | Anthropic Claude API (claude-sonnet-4-6) |
+| Email | Python smtplib (SMTP_HOST/PORT/USER/PASSWORD env vars) |
 | WSGI server | gunicorn (in Docker) |
-| Container | Dockerfile using the official `ghcr.io/astral-sh/uv` binary pattern |
 
 ## Reference material
 
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to parallelise without merge conflicts
-- [`PLAN.md`](PLAN.md) — feature catalogue, phase ordering, stream breakdown
-- [`CLAUDE.md`](CLAUDE.md) — binding conventions for AI contributions
-- `refs/ehcf-prospectus.md` — the first grant we're modelling
-- `refs/pride-in-place-prospectus.md`, `refs/common-ground-award-prospectus.md`,
-  `refs/changing-futures-lived-experience-support-grant-prospectus.md`,
-  `refs/local-digital-fund-round-6-prospectus.md` — further shapes for
-  stress-testing flexibility
-
-## Hackathon resources
-
-- [Hackathon repo](https://github.com/Version1/ai-engineering-lab-hackathon-london-2026)
-- [Hackathon README](https://github.com/Version1/ai-engineering-lab-hackathon-london-2026/blob/main/README.md)
-- [Open brief](https://github.com/Version1/ai-engineering-lab-hackathon-london-2026/blob/main/open-brief.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md) -- stream ownership and merge-conflict avoidance
+- [PLAN.md](PLAN.md) -- feature catalogue, phase ordering, stream breakdown
+- [CLAUDE.md](CLAUDE.md) -- binding conventions for AI contributions
+- `refs/ehcf-prospectus.md` -- EHCF grant prospectus
+- `refs/` -- further grant prospectuses for stress-testing flexibility
