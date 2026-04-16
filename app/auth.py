@@ -213,9 +213,7 @@ def _role_landing(role: UserRole) -> str:
     if role == UserRole.ASSESSOR:
         return url_for("assessor.queue")
     if role == UserRole.ADMIN:
-        # No admin blueprint yet; park admins on the assessor queue, which is
-        # also role-gated but will 403 until we add admin-as-assessor overlap.
-        return url_for("assessor.queue")
+        return url_for("admin.index")
     return url_for("applicant.dashboard")
 
 

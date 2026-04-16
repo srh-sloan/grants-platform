@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
+
+{% block title %}Import grant from prospectus{% endblock %}
+
+{% block content %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+
+    <a href="{{ url_for('admin.index') }}" class="govuk-back-link">Back to grant administration</a>
+
+    <h1 class="govuk-heading-xl">Import grant from prospectus</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="govuk-error-summary" data-module="govuk-error-summary">
+          <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">
+              <p class="govuk-body">{{ message }}</p>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    <p class="govuk-body">
+      Upload a structured CSV prospectus or paste the prospectus text below.
+      The platform will use AI to extract the grant configuration, eligibility rules,
+      scoring criteria, and application form fields for your review.
+    </p>
+
+    <div class="govuk-inset-text">
+      <p class="govuk-body">
+        <strong>This is an AI-assisted draft only.</strong> You must review and edit
+        the generated JSON before saving. The grant will be saved in
+        <strong>draft</strong> status and will not be visible to applicants until
+        you publish it.
+      </p>
+    </div>
+
+    <h2 class="govuk-heading-m">Option 1: Upload a structured CSV</h2>
+
+    <p class="govuk-body">
+      Use the
+      <a class="govuk-link" href="{{ url_for('admin.download_template') }}">CSV template</a>
+      to structure your prospectus data. The CSV defines grant metadata, eligibility
+      rules, and scoring criteria in a machine-readable format.
+    </p>
+
+    <form method="post" action="{{ url_for('admin.import_grant') }}" enctype="multipart/form-data" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="prospectus_file">
+          Upload CSV prospectus
+        </label>
+        <div class="govuk-hint">File must be a .csv file using the template format.</div>
+        <input class="govuk-file-upload" id="prospectus_file" name="prospectus_file" type="file" accept=".csv,text/csv">
+      </div>
+
+      <h2 class="govuk-heading-m">Option 2: Paste prospectus text</h2>
+
+      <p class="govuk-body">
+        Paste the prospectus as plain text or Markdown. The AI will extract structure
+        from the narrative. This works best when the prospectus includes explicit
+        eligibility criteria, scoring criteria, and funding amounts.
+      </p>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="prospectus_text">
+          Prospectus text
+        </label>
+        <div class="govuk-hint">
+          If you upload a CSV file above, this field is ignored.
+        </div>
+        <textarea class="govuk-textarea govuk-!-font-family-monospace" id="prospectus_text" name="prospectus_text" rows="16" spellcheck="false"></textarea>
+      </div>
+
+      {{ govukButton({"text": "Generate grant configuration", "preventDoubleClick": true}) }}
+
+    </form>
+
+    <details class="govuk-details govuk-!-margin-top-6">
+      <summary class="govuk-details__summary">
+        <span class="govuk-details__summary-text">About the CSV format</span>
+      </summary>
+      <div class="govuk-details__text">
+        <p class="govuk-body">Each row has columns: <code>type, key, value, extra1, extra2, extra3</code></p>
+        <ul class="govuk-list govuk-list--bullet">
+          <li><strong>meta</strong> rows set grant-level fields (name, slug, budget, dates, contact email).</li>
+          <li><strong>eligibility</strong> rows define pass/fail rules. <code>value</code> is the rule type
+            (<code>in</code>, <code>equals</code>, <code>max</code>, <code>min</code>);
+            <code>extra1</code> is the threshold or pipe-separated allowed values;
+            <code>extra2</code> is the human-readable rule label.</li>
+          <li><strong>criterion</strong> rows define scoring criteria. <code>value</code> is the criterion label;
+            <code>extra1</code> is the weight (integer, all weights must sum to 100);
+            <code>extra2</code> is the max score (usually 3);
+            <code>extra3</code> is <code>true</code> if a zero score triggers auto-rejection.</li>
+          <li>Rows starting with <code>#</code> in the type column are treated as comments.</li>
+        </ul>
+        <p class="govuk-body">
+          <a class="govuk-link" href="{{ url_for('admin.download_template') }}">Download the template</a>
+          to see a worked example.
+        </p>
+      </div>
+    </details>
+
+  </div>
+</div>
+{% endblock %}

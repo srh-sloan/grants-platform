@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% from 'govuk_frontend_jinja/components/tag/macro.html' import govukTag %}
+{% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
+
+{% block title %}Grant administration{% endblock %}
+
+{% set STATUS_COLOUR = {
+  "open":   "govuk-tag--green",
+  "closed": "govuk-tag--grey",
+  "draft":  "govuk-tag--yellow"
+} %}
+
+{% block content %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+
+    <h1 class="govuk-heading-xl">Grant administration</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="govuk-notification-banner {% if category == 'success' %}govuk-notification-banner--success{% endif %}" role="{% if category == 'success' %}alert{% else %}region{% endif %}" aria-labelledby="govuk-notification-banner-title">
+          <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">
+              {% if category == 'success' %}Success{% else %}Important{% endif %}
+            </h2>
+          </div>
+          <div class="govuk-notification-banner__content">
+            <p class="govuk-body">{{ message }}</p>
+          </div>
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    <p class="govuk-body">
+      Use this area to manage grant definitions, import new grants from a prospectus,
+      and review draft grants before publishing.
+    </p>
+
+    <div class="govuk-button-group govuk-!-margin-bottom-6">
+      <a href="{{ url_for('admin.import_grant') }}" class="govuk-button">Import grant from prospectus</a>
+    </div>
+
+    <h2 class="govuk-heading-l">All grants</h2>
+
+    {% if grants %}
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th class="govuk-table__header">Name</th>
+          <th class="govuk-table__header">Slug</th>
+          <th class="govuk-table__header">Status</th>
+          <th class="govuk-table__header">Criteria</th>
+          <th class="govuk-table__header">Action</th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        {% for grant in grants %}
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">{{ grant.name }}</td>
+          <td class="govuk-table__cell"><code>{{ grant.slug }}</code></td>
+          <td class="govuk-table__cell">
+            {{ govukTag({"text": grant.status.value, "classes": STATUS_COLOUR.get(grant.status.value, "")}) }}
+          </td>
+          <td class="govuk-table__cell">
+            {{ grant.config_json.get('criteria', [])|length }}
+          </td>
+          <td class="govuk-table__cell">
+            <a class="govuk-link" href="{{ url_for('assessor.queue') }}">View applications</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="govuk-body">No grants defined yet. Import one using the button above.</p>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
