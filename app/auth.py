@@ -67,7 +67,12 @@ bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 @login_manager.user_loader
 def load_user(user_id: str) -> User | None:
-    return db.session.get(User, int(user_id))
+    # Flask-Login expects None on lookup failure. A malformed / tampered
+    # session cookie should sign the user out cleanly, not 500 the app.
+    try:
+        return db.session.get(User, int(user_id))
+    except (TypeError, ValueError):
+        return None
 
 
 # ---------------------------------------------------------------------------

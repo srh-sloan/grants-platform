@@ -1,6 +1,9 @@
 {% from 'govuk_frontend_jinja/components/phase-banner/macro.html' import govukPhaseBanner %}
 
+{# Grant-agnostic copy — every grant surfaces through this chrome, so the
+   banner must not reference a single fund's mailbox. Per-grant contact
+   details belong on the grant's own pages, pulled from config. #}
 {{ govukPhaseBanner({
   "tag": {"text": "Beta"},
-  "html": 'This is a new service – your <a class="govuk-link" href="mailto:ehcf@communities.gov.uk">feedback</a> will help us to improve it.'
+  "text": "This is a new service. Help us improve it."
 }) }}

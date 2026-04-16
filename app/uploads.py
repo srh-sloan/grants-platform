@@ -11,27 +11,31 @@ Public contract (pinned in ``CONTRIBUTING.md``):
 - :func:`list_documents(application_id) -> list[Document]`
 - :func:`document_url(doc) -> str`
 
-Phase 0 ships these as stubs so Streams A + C can import them without waiting
-for Stream D. The stubs raise :class:`NotImplementedError` rather than
-returning fake data — if a test hits one, the signal is obvious.
-
-Download route lives at ``/uploads/<document_id>`` (authz-gated). The
-blueprint is registered from ``app.__init__._BLUEPRINT_MODULES`` once Stream
-D lands it.
+Download route lives at ``/uploads/<doc_id>`` (authz-gated).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import os
 
-if TYPE_CHECKING:  # pragma: no cover — import-cycle guard
-    from werkzeug.datastructures import FileStorage
+from flask import Blueprint, abort, current_app, send_from_directory, url_for
+from flask_login import current_user, login_required
+from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
 
-    from app.models import Application, Document
+from app.extensions import db
+from app.models import Application, ApplicationStatus, Document, UserRole
+
+bp = Blueprint("uploads", __name__, url_prefix="/uploads")
 
 
 class UploadRejected(ValueError):
     """Raised when an upload fails validation (size, MIME, etc)."""
+
+
+# ---------------------------------------------------------------------------
+# Public helpers (consumed by Streams A and C)
+# ---------------------------------------------------------------------------
 
 
 def save_upload(
@@ -39,25 +43,84 @@ def save_upload(
     kind: str,
     file_storage: FileStorage,
 ) -> Document:
-    """Persist ``file_storage`` to disk and create a ``Document`` row.
+    """Persist *file_storage* to disk and create a ``Document`` row.
 
     Storage layout: ``UPLOAD_FOLDER/<application_id>/<kind>/<filename>``.
-    Raises :class:`UploadRejected` on validation failure (size, MIME, extension).
-    Stream D replaces this stub in Phase 2.
+    Raises :class:`UploadRejected` on validation failure.
     """
-    raise NotImplementedError("Stream D: save_upload not implemented yet")
+    original_filename = file_storage.filename or ""
+    safe_name = secure_filename(original_filename)
+    if not safe_name:
+        raise UploadRejected("Filename is empty or contains only unsafe characters")
+
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    relative_dir = os.path.join(str(application.id), kind)
+    absolute_dir = os.path.join(upload_folder, relative_dir)
+    os.makedirs(absolute_dir, exist_ok=True)
+
+    relative_path = os.path.join(relative_dir, safe_name)
+    absolute_path = os.path.join(upload_folder, relative_path)
+
+    file_storage.save(absolute_path)
+
+    doc = Document(
+        application_id=application.id,
+        kind=kind,
+        storage_path=relative_path,
+        filename=original_filename,
+    )
+    db.session.add(doc)
+    db.session.commit()
+    return doc
 
 
 def list_documents(application_id: int) -> list[Document]:
-    """Return all documents attached to ``application_id`` ordered by upload time.
-
-    Empty list when the application has no documents. Stream D replaces this
-    stub in Phase 2 — until then, review / detail pages render an empty
-    "Supporting documents" section.
-    """
-    return []
+    """Return all documents for *application_id*, ordered by upload time."""
+    return (
+        db.session.query(Document)
+        .filter_by(application_id=application_id)
+        .order_by(Document.uploaded_at)
+        .all()
+    )
 
 
 def document_url(doc: Document) -> str:
-    """URL for the authz-gated download route for ``doc``."""
-    raise NotImplementedError("Stream D: document_url not implemented yet")
+    """URL for the authz-gated download route for *doc*."""
+    return url_for("uploads.serve_document", doc_id=doc.id)
+
+
+# ---------------------------------------------------------------------------
+# Download route (authz-gated)
+# ---------------------------------------------------------------------------
+
+
+@bp.get("/<int:doc_id>")
+@login_required
+def serve_document(doc_id: int):
+    """Serve a document file after checking authorization.
+
+    - Applicants may only download documents attached to their own org's
+      applications.
+    - Assessors may download documents for any non-draft application.
+    """
+    doc = db.session.get(Document, doc_id)
+    if doc is None:
+        abort(404)
+
+    application = doc.application
+
+    if current_user.role == UserRole.APPLICANT:
+        if application.org_id != current_user.org_id:
+            abort(403)
+    elif current_user.role in (UserRole.ASSESSOR, UserRole.ADMIN):
+        if application.status == ApplicationStatus.DRAFT:
+            abort(403)
+    else:
+        abort(403)
+
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    return send_from_directory(
+        upload_folder,
+        doc.storage_path,
+        download_name=doc.filename,
+    )

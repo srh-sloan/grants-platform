@@ -19,6 +19,7 @@ URL prefix: ``/apply``. Stable contracts:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from flask import (
     Blueprint,
@@ -32,11 +33,13 @@ from flask import (
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from werkzeug.datastructures import MultiDict
 
 from app.auth import applicant_required
 from app.extensions import db
 from app.forms_runner import (
+    evaluate_eligibility,
     get_page,
     list_pages,
     merge_page_answers,
@@ -52,7 +55,7 @@ from app.models import (
     Grant,
     GrantStatus,
 )
-from app.uploads import list_documents
+from app.uploads import UploadRejected, list_documents, save_upload
 
 bp = Blueprint("applicant", __name__, url_prefix="/apply")
 
@@ -170,16 +173,10 @@ def _extract_field_values(page: dict, form_data: MultiDict) -> dict[str, object]
             else:
                 extracted[fid] = fid in form_data
         elif ftype == "file":
-            # Uploads are Stream D's contract (``app.uploads``). Until that
-            # lands, we accept whatever is in the form payload as a
-            # placeholder string (typically the filename submitted via
-            # Stream D's eventual upload flow). This lets the applicant
-            # finish the form in Phase 1 tests; Stream D will swap in real
-            # ``request.files`` handling without changing this contract.
-            value = form_data.get(fid)
-            if isinstance(value, str):
-                value = value.strip()
-            extracted[fid] = value or None
+            # Real uploads come through request.files and are processed
+            # separately in save_page. We return None here; save_page
+            # supplements with the existing saved answer before validation.
+            extracted[fid] = None
         else:
             value = form_data.get(fid)
             if isinstance(value, str):
@@ -201,6 +198,7 @@ def dashboard():
         db.session.execute(
             select(Application)
             .where(Application.org_id == current_user.org_id)
+            .options(selectinload(Application.grant))
             .order_by(Application.updated_at.desc())
         )
         .scalars()
@@ -225,6 +223,112 @@ def dashboard():
         available_grants=available_grants,
         start_form=_ActionForm(),
         logout_form=_ActionForm(),
+    )
+
+
+def _eligibility_form_for_grant(grant: Grant) -> Form | None:
+    """Return the eligibility form for ``grant``, or None if none is defined."""
+    return db.session.execute(
+        select(Form)
+        .where(Form.grant_id == grant.id, Form.kind == FormKind.ELIGIBILITY)
+        .order_by(Form.version.desc())
+    ).scalars().first()
+
+
+@bp.get("/<grant_slug>/eligibility")
+@applicant_required
+def eligibility(grant_slug: str):
+    """Render the eligibility pre-check form for ``grant_slug``."""
+    grant = db.session.execute(
+        select(Grant).where(Grant.slug == grant_slug)
+    ).scalar_one_or_none()
+    if grant is None:
+        abort(404)
+    if grant.status != GrantStatus.OPEN:
+        flash(
+            f"{grant.name} is not currently open for applications.",
+            "error",
+        )
+        return redirect(url_for("applicant.dashboard"))
+
+    elig_form = _eligibility_form_for_grant(grant)
+    if elig_form is None:
+        # Grant has no eligibility form — skip straight to start.
+        return redirect(url_for("applicant.start", grant_slug=grant.slug))
+
+    page = list_pages(elig_form.schema_json)[0]
+    # The page.html template expects an ``application`` with ``grant`` — use a
+    # lightweight stand-in since no application exists yet.
+    fake_app = SimpleNamespace(id=None, grant=grant)
+
+    return render_template(
+        "forms/page.html",
+        form=elig_form,
+        application=fake_app,
+        page=page,
+        answers={},
+        errors={},
+        back_url=url_for("applicant.dashboard"),
+        action_url=url_for("applicant.eligibility_post", grant_slug=grant.slug),
+        csrf_form=_ActionForm(),
+        all_pages=None,
+        current_index=0,
+    )
+
+
+@bp.post("/<grant_slug>/eligibility")
+@applicant_required
+def eligibility_post(grant_slug: str):
+    """Validate the eligibility form and evaluate eligibility rules."""
+    grant = db.session.execute(
+        select(Grant).where(Grant.slug == grant_slug)
+    ).scalar_one_or_none()
+    if grant is None:
+        abort(404)
+    if grant.status != GrantStatus.OPEN:
+        flash(
+            f"{grant.name} is not currently open for applications.",
+            "error",
+        )
+        return redirect(url_for("applicant.dashboard"))
+
+    elig_form = _eligibility_form_for_grant(grant)
+    if elig_form is None:
+        return redirect(url_for("applicant.start", grant_slug=grant.slug))
+
+    page = list_pages(elig_form.schema_json)[0]
+    submitted = _extract_field_values(page, request.form)
+    errors = validate_page(page, submitted)
+
+    if errors:
+        fake_app = SimpleNamespace(id=None, grant=grant)
+        rendered = render_template(
+            "forms/page.html",
+            form=elig_form,
+            application=fake_app,
+            page=page,
+            answers=submitted,
+            errors=errors,
+            back_url=url_for("applicant.dashboard"),
+            action_url=url_for(
+                "applicant.eligibility_post", grant_slug=grant.slug
+            ),
+            csrf_form=_ActionForm(),
+            all_pages=None,
+            current_index=0,
+        )
+        return rendered, 400
+
+    eligibility_result = evaluate_eligibility(
+        grant.config_json["eligibility"], submitted
+    )
+
+    return render_template(
+        "forms/eligibility_result.html",
+        result=eligibility_result,
+        grant=grant,
+        continue_url=url_for("applicant.start", grant_slug=grant.slug),
+        check_url=url_for("applicant.eligibility", grant_slug=grant.slug),
     )
 
 
@@ -305,6 +409,8 @@ def _render_form_page(
         (i for i, p in enumerate(all_pages) if p["id"] == page["id"]),
         0,
     )
+    # Template contract (see templates/forms/page.html docstring): the progress
+    # line renders only when both page_number and total_pages are provided.
     rendered = render_template(
         "forms/page.html",
         form=form,
@@ -315,8 +421,8 @@ def _render_form_page(
         back_url=back_url,
         action_url=action_url,
         csrf_form=_ActionForm(),
-        all_pages=all_pages,
-        current_index=current_index,
+        page_number=current_index + 1,
+        total_pages=len(all_pages),
     )
     return (rendered, status_code) if status_code != 200 else rendered
 
@@ -359,10 +465,39 @@ def save_page(app_id: int, page_id: str):
         abort(404)
 
     submitted = _extract_field_values(page, request.form)
-    errors = validate_page(page, submitted)
+    existing_page = (application.answers_json or {}).get(page_id, {})
+
+    # Process file uploads BEFORE validation so validate_page sees the
+    # filename as the field value (it just needs a truthy string, not the
+    # actual bytes). Upload errors are collected separately.
+    upload_errors: dict[str, str] = {}
+    for field in page.get("fields") or []:
+        if field.get("type") != "file":
+            continue
+        fid = field["id"]
+        file_storage = request.files.get(fid)
+        if file_storage and file_storage.filename:
+            try:
+                # Stage the Document row; only committed if the full page is valid.
+                doc = save_upload(application, kind=fid, file_storage=file_storage)
+                submitted[fid] = doc.filename
+            except UploadRejected as exc:
+                upload_errors[fid] = str(exc)
+        else:
+            # No new file — use the previously saved filename (from a prior
+            # upload) or any text value submitted in the form (covers tests
+            # and hidden-input replay patterns).
+            submitted[fid] = (
+                existing_page.get(fid)
+                or (request.form.get(fid) or "").strip()
+                or None
+            )
+
+    errors = {**validate_page(page, submitted), **upload_errors}
 
     if errors:
-        # Re-render the same page showing the field-level errors.
+        # Roll back any staged Document rows — the page wasn't fully valid.
+        db.session.rollback()
         return _render_form_page(
             application, form, page, submitted, errors=errors, status_code=400
         )

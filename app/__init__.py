@@ -23,6 +23,7 @@ _BLUEPRINT_MODULES: tuple[str, ...] = (
     "app.auth",
     "app.applicant",
     "app.assessor",
+    "app.uploads",
 )
 
 

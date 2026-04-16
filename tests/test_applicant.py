@@ -287,6 +287,19 @@ def test_form_page_renders_for_owned_draft(client, applicant, seeded_ehcf):
     assert response.status_code == 200
 
 
+def test_form_page_renders_progress_indicator(client, applicant, seeded_ehcf):
+    """The page.html template only renders 'Page X of Y' when both
+    page_number and total_pages are passed — regression test for the
+    context-name mismatch that previously suppressed the progress line."""
+    _grant, form = seeded_ehcf
+    total_pages = len(form.schema_json["pages"])
+    app = _start_application(client, applicant, seeded_ehcf)
+
+    response = client.get(f"/apply/{app.id}/organisation")
+    body = response.get_data(as_text=True)
+    assert f"Page 1 of {total_pages}" in body
+
+
 def test_form_page_404s_on_unknown_application(client, applicant, seeded_ehcf):
     _login(client, applicant)
     response = client.get("/apply/9999/organisation")
@@ -683,3 +696,94 @@ def test_submitted_review_page_shows_confirmation_panel(
     assert "govuk-panel" in body
     # No submit button after submission.
     assert "submit-application" not in body
+
+
+# ---------------------------------------------------------------------------
+# Eligibility
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def seeded_ehcf_with_eligibility(seeded_ehcf, db):
+    """Extend the standard EHCF fixture to also seed the eligibility form."""
+    grant, app_form = seeded_ehcf
+    elig_schema = json.loads((FORMS_DIR / "ehcf-eligibility-v1.json").read_text())
+    elig_form = Form(
+        grant=grant,
+        kind=FormKind.ELIGIBILITY,
+        version=int(elig_schema.get("version", 1)),
+        schema_json=elig_schema,
+    )
+    db.session.add(elig_form)
+    db.session.commit()
+    return grant, app_form, elig_form
+
+
+# Valid eligible answers — matches EHCF eligibility rules exactly.
+_ELIGIBLE_ANSWERS = {
+    "org_type": "charity",
+    "operates_in_england": "true",
+    "annual_income": "500000",
+    "years_serving_homeless": "5",
+    "la_endorsement": "true",
+}
+
+
+def test_eligibility_page_renders(
+    client, applicant, seeded_ehcf_with_eligibility
+):
+    _login(client, applicant)
+    response = client.get("/apply/ehcf/eligibility")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Check your eligibility" in body
+
+
+def test_eligibility_pass_shows_success(
+    client, applicant, seeded_ehcf_with_eligibility
+):
+    _login(client, applicant)
+    response = client.post(
+        "/apply/ehcf/eligibility",
+        data=_ELIGIBLE_ANSWERS,
+    )
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "You appear to be eligible" in body
+
+
+def test_eligibility_fail_shows_failure(
+    client, applicant, seeded_ehcf_with_eligibility
+):
+    _login(client, applicant)
+    # annual_income exceeds the £5M cap
+    data = {**_ELIGIBLE_ANSWERS, "annual_income": "6000000"}
+    response = client.post("/apply/ehcf/eligibility", data=data)
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "does not appear to be eligible" in body
+
+
+def test_eligibility_validation_errors(
+    client, applicant, seeded_ehcf_with_eligibility
+):
+    _login(client, applicant)
+    # POST an empty form — all required fields are missing.
+    response = client.post("/apply/ehcf/eligibility", data={})
+    assert response.status_code == 400
+    body = response.get_data(as_text=True)
+    assert "There is a problem" in body
+
+
+def test_eligibility_skips_when_no_form(client, applicant, seeded_ehcf):
+    """If a grant has no eligibility form, the route redirects to start()."""
+    _login(client, applicant)
+    response = client.get("/apply/ehcf/eligibility", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/apply/ehcf/start" in response.headers["Location"]
+
+
+def test_eligibility_404s_on_unknown_grant(client, applicant):
+    _login(client, applicant)
+    response = client.get("/apply/no-such-grant/eligibility")
+    assert response.status_code == 404
