@@ -121,13 +121,13 @@ ends with a demoable thin slice.
 Ship together, then fan out. Target: a Flask app that boots, renders a GOV.UK
 page, talks to SQLite, and has seeded data.
 
-- [x] P0.1 Flask app factory, config, `run.py`, `pyproject.toml` deps
+- [x] P0.1 Flask app factory, config, `wsgi.py`, `pyproject.toml` deps
 - [x] P0.2 GOV.UK Frontend wired in (Jinja loader, base template, static assets)
 - [x] P0.3 SQLite + SQLAlchemy models for `users`, `organisations`, `grants`, `forms`, `applications`, `documents`, `assessments`
 - [x] P0.4 `seed.py` that loads EHCF grant config + one form schema from JSON
 - [x] P0.5 Repo hygiene: `.gitignore`, `tests/` skeleton, one smoke test that boots the app
 
-**Done when:** `flask --app run run` serves a styled landing page listing
+**Done when:** `flask --app wsgi run` serves a styled landing page listing
 seeded grants from the DB; `pytest` passes.
 
 **Shipped cross-stream contracts** (change these only with a coordinated update):

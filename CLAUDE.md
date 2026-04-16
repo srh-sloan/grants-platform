@@ -70,39 +70,44 @@ for shipping working slices over completeness.
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Language | Python 3.12+ | |
-| Web framework | Flask | Jinja2 for templates |
+| Language | Python 3.12+ (pinned via `.python-version`) | Managed with `uv` |
+| Web framework | Flask 3 | Jinja2 for templates |
 | Database | SQLite | Single file, zero-config. Postgres later if we outgrow it. |
-| ORM | SQLAlchemy | Optional — we may start with raw `sqlite3` if it's faster |
-| Migrations | Alembic / Flask-Migrate | Defer until the schema settles |
-| Auth | Flask-Login + `werkzeug.security` (or bcrypt) | Session-based |
-| Forms | **JSON schemas + Flask-WTF for CSRF/validation** | Form *definitions* are JSON files; the app is a generic runner over them |
-| Styling | GOV.UK Frontend | `govuk-frontend-jinja` macros + `govuk-frontend-wtf` widgets |
+| ORM | SQLAlchemy 2.0 via Flask-SQLAlchemy | Locked in — `app.extensions.db`. |
+| Migrations | Alembic | Deferred until the schema settles; `seed.py --reset` does the destructive reset in the meantime. |
+| Auth | Flask-Login + `werkzeug.security` | Session-based |
+| Forms | **JSON schemas for applicant forms; WTForms (via Flask-WTF) for static forms (login, scoring) and CSRF** | Form *definitions* are JSON files; the app is a generic runner over them |
+| Styling | GOV.UK Frontend | `govuk-frontend-jinja` macros + `govuk-frontend-wtf` widgets, vendored CSS/JS in `app/static/` |
 | File uploads | Local filesystem for v0 | S3 only if we need it |
-| Deployment | Local → Render / Railway later | |
+| Deployment | Docker + docker-compose with gunicorn (prod profile) and Flask dev server (dev profile) | See `Dockerfile`, `docker-compose.yml`, README "Quick start". |
 
 Nothing here is locked in — if someone spots a simpler option mid-hackathon,
 flag it.
 
-## Architecture (planned)
+## Architecture (current)
 
 ```
 /ideas              ← team ideas dumped here before coding
 /refs               ← prospectuses and policy docs
-/app                ← Flask app (not created yet)
-  __init__.py       — app factory
-  models.py         — SQLAlchemy models (or db.py if we skip the ORM)
-  auth.py           — login / register / logout
-  applicant.py      — applicant routes
-  assessor.py       — assessor routes (role-gated)
-  forms_runner.py   — renders + validates forms from JSON schema
+/app                ← Flask app (factory pattern)
+  __init__.py       — app factory (create_app, blueprint registry)
+  extensions.py     — db, login_manager, csrf singletons
+  models.py         — SQLAlchemy models + shared enums
+  public.py         — landing page, /healthz, GOV.UK asset routing
+  auth.py           — login / register / logout + role decorators
+  applicant.py      — applicant routes (/apply)
+  assessor.py       — assessor routes (/assess, role-gated)
+  forms_runner.py   — pure helpers that render + validate JSON form schemas
   scoring.py        — computes weighted scores from grant config
+  uploads.py        — file uploads + Document persistence
   /forms            — JSON form definitions (one per grant / per stage)
   /templates
   /static
+/seed/grants        — grant configs loaded by seed.py
 /tests
 config.py
-run.py
+seed.py
+wsgi.py             — gunicorn / `flask --app wsgi` entry point
 ```
 
 ---
@@ -241,12 +246,19 @@ Any criterion scoring 0 → auto-reject.
 ## GOV.UK Frontend Setup
 
 ### Flask app factory (`app/__init__.py`)
+The factory wires `govuk-frontend-jinja` and `govuk-frontend-wtf` into the
+Jinja loader so their macros resolve under their own prefixes, then initialises
+`WTFormsHelpers` for GOV.UK-styled WTForms widgets:
+
 ```python
 from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
 from govuk_frontend_wtf.main import WTFormsHelpers
 
+from app.extensions import csrf, db, login_manager
+
 def create_app():
     app = Flask(__name__)
+    # ... config.from_object ...
 
     app.jinja_loader = ChoiceLoader([
         PackageLoader("app"),
@@ -255,36 +267,45 @@ def create_app():
             "govuk_frontend_wtf": PackageLoader("govuk_frontend_wtf"),
         }),
     ])
-
     WTFormsHelpers(app)
-    # ... register blueprints, db, login_manager etc.
+    db.init_app(app); login_manager.init_app(app); csrf.init_app(app)
+    # ... register blueprints ...
 ```
 
-### Base template (`templates/base.html`)
-```html
-<!DOCTYPE html>
-<html lang="en" class="govuk-template">
-<head>
+### Base template (`app/templates/base.html`)
+The base template extends the upstream `govuk_frontend_jinja/template.html`
+rather than rolling its own `<html>`/`<body>` chrome — this is what keeps us
+in sync with the design system on upgrades:
+
+```jinja
+{% extends "govuk_frontend_jinja/template.html" %}
+
+{% block pageTitle %}{% block title %}Grants platform{% endblock %} – GOV.UK{% endblock %}
+
+{% block head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='govuk-frontend.min.css') }}">
-</head>
-<body class="govuk-template__body">
-  {% from 'govuk_frontend_jinja/components/skip-link/macro.html' import govukSkipLink %}
-  {{ govukSkipLink({'text': 'Skip to main content', 'href': '#main-content'}) }}
-  {% include 'partials/header.html' %}
-  <div class="govuk-width-container">
-    <main class="govuk-main-wrapper" id="main-content">
-      {% block content %}{% endblock %}
-    </main>
-  </div>
-  <script src="{{ url_for('static', filename='govuk-frontend.min.js') }}"></script>
-</body>
-</html>
+{% endblock %}
+
+{% block header %}{% include "partials/header.html" %}{% endblock %}
+{% block beforeContent %}{% include "partials/phase_banner.html" %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block bodyEnd %}
+  <script type="module" src="{{ url_for('static', filename='govuk-frontend.min.js') }}"></script>
+  <script type="module">
+    import { initAll } from "{{ url_for('static', filename='govuk-frontend.min.js') }}"
+    initAll()
+  </script>
+{% endblock %}
 ```
 
 ### Static assets
 Download `govuk-frontend.min.css` and `govuk-frontend.min.js` from the
 [GOV.UK Frontend releases](https://github.com/alphagov/govuk-frontend/releases)
-and place in `app/static/`.
+and place them in `app/static/`. The accompanying `assets/` folder
+(`fonts/`, `images/`) sits alongside them under `app/static/assets/` and is
+re-served at `/assets/<path>` by `app.public.govuk_assets` so the prebuilt
+CSS resolves font and image URLs correctly.
 
 ---
 
@@ -344,8 +365,11 @@ Deviations should be flagged up and agreed with the team, not slipped in.
 - **Templates:** `app/templates/<blueprint>/<action>.html`
   (e.g. `applicant/dashboard.html`, `assessor/score.html`). Shared chrome in
   `app/templates/partials/`. Always extend `base.html`.
-- **Static assets:** `app/static/` (flat). GOV.UK bundle files keep their
-  upstream names.
+- **Static assets:** `app/static/`. The two GOV.UK bundle files
+  (`govuk-frontend.min.css`, `govuk-frontend.min.js`) keep their upstream
+  names and sit at the top level; the upstream `assets/` folder
+  (fonts + images) sits beside them and is re-served at `/assets/<path>`
+  by `app.public.govuk_assets` so the CSS resolves font/image URLs.
 - **JSON form schemas:** `app/forms/<grant-slug>-<kind>-v<n>.json`
   (e.g. `ehcf-application-v1.json`, `ehcf-assessment-v1.json`). Lowercase,
   hyphen-separated, versioned from day one.
@@ -483,7 +507,7 @@ For anything else: decide, do, commit, move on.
 
 Before reporting a task complete, Claude must:
 
-1. Have the app boot (`flask --app app run`) without import errors.
+1. Have the app boot (`flask --app wsgi run`) without import errors.
 2. Have `pytest` pass (or state explicitly which tests were added/skipped
    and why).
 3. Have touched only files within the task's stream (or have flagged the
