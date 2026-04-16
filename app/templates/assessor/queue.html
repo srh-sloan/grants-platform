@@ -82,7 +82,8 @@
             <th class="govuk-table__header">Submitted</th>
             <th class="govuk-table__header">Status</th>
             <th class="govuk-table__header">AI score</th>
-            <th class="govuk-table__header">Recommendation</th>
+            <th class="govuk-table__header">AI recommendation</th>
+            <th class="govuk-table__header">Manually scored</th>
             <th class="govuk-table__header">Flagged</th>
             <th class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
           </tr>
@@ -114,7 +115,7 @@
               </td>
               <td class="govuk-table__cell">
                 {% if assessment and assessment.weighted_total is not none %}
-                  {{ assessment.weighted_total }}
+                  {{ assessment.weighted_total }} / {{ grant_max_totals.get(application.grant_id, "?") }}
                 {% else %}
                   <span class="govuk-hint">Not scored</span>
                 {% endif %}
@@ -127,6 +128,13 @@
                   }) }}
                 {% else %}
                   <span class="govuk-hint">Pending</span>
+                {% endif %}
+              </td>
+              <td class="govuk-table__cell">
+                {% if application.id in scored_app_ids %}
+                  {{ govukTag({"text": "Scored", "classes": "govuk-tag--green"}) }}
+                {% else %}
+                  <span class="govuk-hint">—</span>
                 {% endif %}
               </td>
               <td class="govuk-table__cell">
