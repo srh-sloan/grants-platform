@@ -24,6 +24,7 @@ from flask_login import current_user, login_required
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
+from app.authz import is_application_owned_by
 from app.extensions import db
 from app.models import Application, ApplicationStatus, Document, UserRole
 
@@ -43,7 +44,20 @@ _SAFE_KIND_RE = _re.compile(r"^[A-Za-z0-9_-]+$")
 # We check both the extension and the first few bytes (magic numbers) to
 # prevent bypass via renamed executables.
 _ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
-    {".pdf", ".doc", ".docx", ".odt", ".xls", ".xlsx", ".ods", ".csv", ".png", ".jpg", ".jpeg", ".gif"}
+    {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".odt",
+        ".xls",
+        ".xlsx",
+        ".ods",
+        ".csv",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+    }
 )
 
 # Magic-byte signatures for each allowed content category.
@@ -161,7 +175,7 @@ def serve_document(doc_id: int):
     application = doc.application
 
     if current_user.role == UserRole.APPLICANT:
-        if application.org_id != current_user.org_id:
+        if not is_application_owned_by(application, current_user):
             abort(403)
     elif current_user.role in (UserRole.ASSESSOR, UserRole.ADMIN):
         if application.status == ApplicationStatus.DRAFT:

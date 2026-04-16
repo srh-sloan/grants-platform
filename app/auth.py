@@ -184,9 +184,7 @@ class RegisterForm(FlaskForm):
             Length(
                 min=_PASSWORD_MIN_LENGTH,
                 max=128,
-                message=(
-                    f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"
-                ),
+                message=(f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"),
             ),
             Regexp(_PASSWORD_COMPLEXITY_REGEX, message=_PASSWORD_COMPLEXITY_MESSAGE),
         ],
@@ -206,9 +204,7 @@ class RegisterForm(FlaskForm):
         email = (field.data or "").strip().lower()
         if not email:
             return
-        existing = db.session.execute(
-            select(User).where(User.email == email)
-        ).scalar_one_or_none()
+        existing = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
         if existing is not None:
             raise ValidationError("An account with this email already exists")
 
@@ -260,12 +256,8 @@ def login():
 
     if form.validate_on_submit():
         email = (form.email.data or "").strip().lower()
-        user = db.session.execute(
-            select(User).where(User.email == email)
-        ).scalar_one_or_none()
-        if user is not None and check_password_hash(
-            user.password_hash, form.password.data or ""
-        ):
+        user = db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        if user is not None and check_password_hash(user.password_hash, form.password.data or ""):
             login_user(user)
             audit_log("LOGIN_SUCCESS", user_id=user.id, email=user.email, role=user.role.value)
             flash("You are signed in.", "success")

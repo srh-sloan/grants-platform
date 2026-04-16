@@ -119,9 +119,7 @@ class User(UserMixin, db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(db.String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(
-        SAEnum(UserRole, native_enum=False), nullable=False
-    )
+    role: Mapped[UserRole] = mapped_column(SAEnum(UserRole, native_enum=False), nullable=False)
     org_id: Mapped[int | None] = mapped_column(db.ForeignKey("organisations.id"))
     created_at: Mapped[datetime] = mapped_column(default=_utcnow, nullable=False)
 
@@ -154,7 +152,9 @@ class Grant(db.Model):
     config_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     forms: Mapped[list[Form]] = relationship(back_populates="grant", cascade="all, delete-orphan")
-    applications: Mapped[list[Application]] = relationship(back_populates="grant", cascade="all, delete-orphan")
+    applications: Mapped[list[Application]] = relationship(
+        back_populates="grant", cascade="all, delete-orphan"
+    )
 
     @property
     def summary(self) -> str | None:
@@ -166,9 +166,7 @@ class Form(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     grant_id: Mapped[int] = mapped_column(db.ForeignKey("grants.id"), nullable=False, index=True)
-    kind: Mapped[FormKind] = mapped_column(
-        SAEnum(FormKind, native_enum=False), nullable=False
-    )
+    kind: Mapped[FormKind] = mapped_column(SAEnum(FormKind, native_enum=False), nullable=False)
     version: Mapped[int] = mapped_column(db.Integer, nullable=False, default=1)
     schema_json: Mapped[dict] = mapped_column(JSON, nullable=False)
 
@@ -177,12 +175,12 @@ class Form(db.Model):
 
 class Application(db.Model):
     __tablename__ = "applications"
-    __table_args__ = (
-        db.UniqueConstraint("org_id", "grant_id", name="uq_application_org_grant"),
-    )
+    __table_args__ = (db.UniqueConstraint("org_id", "grant_id", name="uq_application_org_grant"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    org_id: Mapped[int] = mapped_column(db.ForeignKey("organisations.id"), nullable=False, index=True)
+    org_id: Mapped[int] = mapped_column(
+        db.ForeignKey("organisations.id"), nullable=False, index=True
+    )
     grant_id: Mapped[int] = mapped_column(db.ForeignKey("grants.id"), nullable=False, index=True)
     form_version: Mapped[int] = mapped_column(db.Integer, nullable=False, default=1)
     status: Mapped[ApplicationStatus] = mapped_column(
@@ -193,14 +191,16 @@ class Application(db.Model):
     answers_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     submitted_at: Mapped[datetime | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(default=_utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        default=_utcnow, onupdate=_utcnow, nullable=False
-    )
+    updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow, nullable=False)
 
     organisation: Mapped[Organisation] = relationship(back_populates="applications")
     grant: Mapped[Grant] = relationship(back_populates="applications")
-    documents: Mapped[list[Document]] = relationship(back_populates="application", cascade="all, delete-orphan")
-    assessments: Mapped[list[Assessment]] = relationship(back_populates="application", cascade="all, delete-orphan")
+    documents: Mapped[list[Document]] = relationship(
+        back_populates="application", cascade="all, delete-orphan"
+    )
+    assessments: Mapped[list[Assessment]] = relationship(
+        back_populates="application", cascade="all, delete-orphan"
+    )
 
 
 class Document(db.Model):

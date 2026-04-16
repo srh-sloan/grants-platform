@@ -55,9 +55,7 @@ def init_task_runner(app: Flask) -> None:
         return
 
     max_workers = int(app.config.get("TASK_WORKERS", 2))
-    executor = ThreadPoolExecutor(
-        max_workers=max_workers, thread_name_prefix="grants-bg"
-    )
+    executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="grants-bg")
     app.extensions[_EXECUTOR_EXT_KEY] = executor
     atexit.register(_shutdown_executor, executor)
     log.info("init_task_runner: started thread pool with %s workers", max_workers)

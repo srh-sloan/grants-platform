@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      # The app factory refuses to boot with the dev fallback outside
+      # TESTING/DEBUG, so set a throwaway value for any non-test step that
+      # instantiates the app.
+      FLASK_SECRET_KEY: ci-secret-not-used-anywhere
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python toolchain
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Boot check
+        run: uv run python -c "from wsgi import app; print('ok')"
+
+      - name: Pytest
+        run: uv run pytest

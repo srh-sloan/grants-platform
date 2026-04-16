@@ -61,8 +61,15 @@ def test_seed_loads_ehcf(app, db):
 def test_ehcf_application_form_uses_supported_field_types():
     """All field types in the seeded form must be in the agreed set (CLAUDE.md §6)."""
     supported = {
-        "text", "textarea", "radio", "checkbox", "select",
-        "number", "currency", "date", "file",
+        "text",
+        "textarea",
+        "radio",
+        "checkbox",
+        "select",
+        "number",
+        "currency",
+        "date",
+        "file",
     }
     schema = json.loads((FORMS_DIR / "ehcf-application-v1.json").read_text())
     used = {field["type"] for page in schema["pages"] for field in page["fields"]}
@@ -101,8 +108,15 @@ def test_common_ground_is_capital_only():
 def test_common_ground_application_form_uses_supported_field_types():
     """All field types in the Common Ground form must be in the agreed set."""
     supported = {
-        "text", "textarea", "radio", "checkbox", "select",
-        "number", "currency", "date", "file",
+        "text",
+        "textarea",
+        "radio",
+        "checkbox",
+        "select",
+        "number",
+        "currency",
+        "date",
+        "file",
     }
     schema = json.loads((FORMS_DIR / "common-ground-application-v1.json").read_text())
     used = {field["type"] for page in schema["pages"] for field in page["fields"]}
@@ -124,9 +138,7 @@ def test_seed_loads_common_ground(app, db):
     """seed_into_session populates the Common Ground grant + its form from disk."""
     seed_into_session(reset=False)
 
-    grant = db.session.execute(
-        select(Grant).where(Grant.slug == "common-ground")
-    ).scalar_one()
+    grant = db.session.execute(select(Grant).where(Grant.slug == "common-ground")).scalar_one()
     assert grant.name == "Common Ground Award"
     assert len(grant.config_json["criteria"]) == 5
 

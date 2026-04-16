@@ -14,7 +14,6 @@ import pytest
 
 from app.prospectus_parser import parse_prospectus_csv
 
-
 # ---------------------------------------------------------------------------
 # CSV parser unit tests (pure — no I/O)
 # ---------------------------------------------------------------------------
@@ -122,9 +121,26 @@ _MOCK_RESULT = {
         "prospectus_url": "",
         "eligibility": [],
         "criteria": [],
-        "award_ranges": {"revenue_min": None, "revenue_max": None, "capital_min": None, "capital_max": None, "total_budget": 0, "duration_years": 1},
-        "timeline": {"opens_on": "", "closes_on": "", "assessment_window": "", "moderation_window": "", "outcome_notification": "", "first_payments": ""},
-        "forms": {"application": "test-grant-application-v1", "assessment": "test-grant-assessment-v1"},
+        "award_ranges": {
+            "revenue_min": None,
+            "revenue_max": None,
+            "capital_min": None,
+            "capital_max": None,
+            "total_budget": 0,
+            "duration_years": 1,
+        },
+        "timeline": {
+            "opens_on": "",
+            "closes_on": "",
+            "assessment_window": "",
+            "moderation_window": "",
+            "outcome_notification": "",
+            "first_payments": "",
+        },
+        "forms": {
+            "application": "test-grant-application-v1",
+            "assessment": "test-grant-assessment-v1",
+        },
     },
     "application_schema": {
         "id": "test-grant-application",
@@ -137,7 +153,14 @@ _MOCK_RESULT = {
         "version": 1,
         "kind": "assessment",
         "description": "Generated",
-        "scoring": {"source": "grant.config_json.criteria", "score_field": "score", "notes_field": "notes", "score_min": 0, "score_max": 3, "notes_required": True},
+        "scoring": {
+            "source": "grant.config_json.criteria",
+            "score_field": "score",
+            "notes_field": "notes",
+            "score_min": 0,
+            "score_max": 3,
+            "notes_required": True,
+        },
     },
     "errors": [],
 }
@@ -146,8 +169,9 @@ _MOCK_RESULT = {
 @pytest.fixture()
 def admin_client(app, db):
     """Flask test client logged in as an admin user."""
-    from app.models import User, UserRole
     from werkzeug.security import generate_password_hash
+
+    from app.models import User, UserRole
 
     admin = User(
         email="admin@test.local",
@@ -226,7 +250,15 @@ def _make_draft_grant(db, slug="draft-grant", with_forms=True, weight_total=100)
     """Helper: create a draft grant with valid criteria and optionally an application form."""
     from app.models import Form, FormKind, Grant, GrantStatus
 
-    criteria = [{"id": "quality", "label": "Quality", "weight": weight_total, "max": 3, "auto_reject_on_zero": False}]
+    criteria = [
+        {
+            "id": "quality",
+            "label": "Quality",
+            "weight": weight_total,
+            "max": 3,
+            "auto_reject_on_zero": False,
+        }
+    ]
     grant = Grant(
         slug=slug,
         name="Draft Grant",
@@ -234,13 +266,17 @@ def _make_draft_grant(db, slug="draft-grant", with_forms=True, weight_total=100)
         config_json={
             "slug": slug,
             "criteria": criteria,
-            "eligibility": [{"id": "org_type", "type": "in", "label": "Org type", "values": ["charity"]}],
+            "eligibility": [
+                {"id": "org_type", "type": "in", "label": "Org type", "values": ["charity"]}
+            ],
         },
     )
     db.session.add(grant)
     db.session.flush()
     if with_forms:
-        db.session.add(Form(grant_id=grant.id, kind=FormKind.APPLICATION, version=1, schema_json={"pages": []}))
+        db.session.add(
+            Form(grant_id=grant.id, kind=FormKind.APPLICATION, version=1, schema_json={"pages": []})
+        )
     db.session.commit()
     return grant
 
@@ -254,7 +290,7 @@ def test_grant_detail_page(admin_client, db):
 
 
 def test_publish_valid_grant(admin_client, db):
-    from app.models import Grant, GrantStatus
+    from app.models import GrantStatus
 
     grant = _make_draft_grant(db)
     resp = admin_client.post(f"/admin/grants/{grant.id}/publish")
@@ -284,7 +320,7 @@ def test_publish_blocked_no_form(admin_client, db):
 
 
 def test_close_open_grant(admin_client, db):
-    from app.models import Grant, GrantStatus
+    from app.models import GrantStatus
 
     grant = _make_draft_grant(db, slug="open-grant")
     grant.status = GrantStatus.OPEN
@@ -297,7 +333,7 @@ def test_close_open_grant(admin_client, db):
 
 
 def test_publish_already_open_is_noop(admin_client, db):
-    from app.models import Grant, GrantStatus
+    from app.models import GrantStatus
 
     grant = _make_draft_grant(db, slug="already-open")
     grant.status = GrantStatus.OPEN
@@ -310,8 +346,9 @@ def test_publish_already_open_is_noop(admin_client, db):
 
 
 def test_admin_forbidden_for_applicant(app, db):
-    from app.models import User, UserRole
     from werkzeug.security import generate_password_hash
+
+    from app.models import User, UserRole
 
     applicant = User(
         email="applicant@test.local",
@@ -327,5 +364,3 @@ def test_admin_forbidden_for_applicant(app, db):
 
     resp = client.get("/admin/")
     assert resp.status_code == 403
-
-

@@ -39,6 +39,7 @@ from sqlalchemy.orm import selectinload
 from werkzeug.datastructures import MultiDict
 
 from app.auth import applicant_required
+from app.authz import is_application_owned_by
 from app.extensions import db
 from app.external_validators import validate_page_external
 from app.forms_runner import (
@@ -82,7 +83,7 @@ class _ActionForm(FlaskForm):
 def _get_owned_application(app_id: int) -> Application:
     """Load an application or 404 if it isn't owned by the current user's org."""
     application = db.session.get(Application, app_id)
-    if application is None or application.org_id != current_user.org_id:
+    if application is None or not is_application_owned_by(application, current_user):
         abort(404)
     return application
 
@@ -210,9 +211,9 @@ def _extract_field_values(page: dict, form_data: MultiDict) -> dict[str, object]
             extracted[fid] = None
         elif ftype == "date":
             # govukDateInput submits three separate fields: fid-day, fid-month, fid-year.
-            day   = (form_data.get(f"{fid}-day")   or "").strip()
+            day = (form_data.get(f"{fid}-day") or "").strip()
             month = (form_data.get(f"{fid}-month") or "").strip()
-            year  = (form_data.get(f"{fid}-year")  or "").strip()
+            year = (form_data.get(f"{fid}-year") or "").strip()
             if day and month and year:
                 extracted[fid] = f"{year.zfill(4)}-{month.zfill(2)}-{day.zfill(2)}"
             else:
@@ -266,20 +267,22 @@ def dashboard():
 
 def _eligibility_form_for_grant(grant: Grant) -> Form | None:
     """Return the eligibility form for ``grant``, or None if none is defined."""
-    return db.session.execute(
-        select(Form)
-        .where(Form.grant_id == grant.id, Form.kind == FormKind.ELIGIBILITY)
-        .order_by(Form.version.desc())
-    ).scalars().first()
+    return (
+        db.session.execute(
+            select(Form)
+            .where(Form.grant_id == grant.id, Form.kind == FormKind.ELIGIBILITY)
+            .order_by(Form.version.desc())
+        )
+        .scalars()
+        .first()
+    )
 
 
 @bp.get("/<grant_slug>/eligibility")
 @applicant_required
 def eligibility(grant_slug: str):
     """Render the eligibility pre-check form for ``grant_slug``."""
-    grant = db.session.execute(
-        select(Grant).where(Grant.slug == grant_slug)
-    ).scalar_one_or_none()
+    grant = db.session.execute(select(Grant).where(Grant.slug == grant_slug)).scalar_one_or_none()
     if grant is None:
         abort(404)
     if grant.status != GrantStatus.OPEN:
@@ -322,9 +325,7 @@ def eligibility(grant_slug: str):
 @applicant_required
 def eligibility_post(grant_slug: str):
     """Validate the eligibility form and evaluate eligibility rules."""
-    grant = db.session.execute(
-        select(Grant).where(Grant.slug == grant_slug)
-    ).scalar_one_or_none()
+    grant = db.session.execute(select(Grant).where(Grant.slug == grant_slug)).scalar_one_or_none()
     if grant is None:
         abort(404)
     if grant.status != GrantStatus.OPEN:
@@ -355,9 +356,7 @@ def eligibility_post(grant_slug: str):
             answers=submitted,
             errors=errors,
             back_url=url_for("applicant.dashboard"),
-            action_url=url_for(
-                "applicant.eligibility_post", grant_slug=grant.slug
-            ),
+            action_url=url_for("applicant.eligibility_post", grant_slug=grant.slug),
             csrf_form=_ActionForm(),
             all_pages=None,
             current_index=0,
@@ -365,9 +364,7 @@ def eligibility_post(grant_slug: str):
         )
         return rendered, 400
 
-    eligibility_result = evaluate_eligibility(
-        grant.config_json["eligibility"], submitted
-    )
+    eligibility_result = evaluate_eligibility(grant.config_json["eligibility"], submitted)
 
     return render_template(
         "forms/eligibility_result.html",
@@ -386,9 +383,7 @@ def start(grant_slug: str):
     Idempotent: repeated visits reuse the existing draft so applicants can
     bookmark and come back later.
     """
-    grant = db.session.execute(
-        select(Grant).where(Grant.slug == grant_slug)
-    ).scalar_one_or_none()
+    grant = db.session.execute(select(Grant).where(Grant.slug == grant_slug)).scalar_one_or_none()
     if grant is None:
         abort(404)
     if grant.status != GrantStatus.OPEN:
@@ -439,9 +434,7 @@ def _render_form_page(
         if back_page
         else url_for("applicant.dashboard")
     )
-    action_url = url_for(
-        "applicant.form_page", app_id=application.id, page_id=page["id"]
-    )
+    action_url = url_for("applicant.form_page", app_id=application.id, page_id=page["id"])
     all_pages = list_pages(form.schema_json)
     current_index = next(
         (i for i, p in enumerate(all_pages) if p["id"] == page["id"]),
@@ -486,12 +479,15 @@ def task_list(app_id: int):
             status = "in_progress"
         else:
             status = "completed"
-        tasks.append({
-            "page": page,
-            "status": status,
-            "href": url_for("applicant.form_page", app_id=app_id, page_id=pid)
-            if application.status == ApplicationStatus.DRAFT else None,
-        })
+        tasks.append(
+            {
+                "page": page,
+                "status": status,
+                "href": url_for("applicant.form_page", app_id=app_id, page_id=pid)
+                if application.status == ApplicationStatus.DRAFT
+                else None,
+            }
+        )
 
     all_complete = (
         application.status == ApplicationStatus.DRAFT
@@ -568,11 +564,7 @@ def save_page(app_id: int, page_id: str):
             # No new file — use the previously saved filename (from a prior
             # upload) or any text value submitted in the form (covers tests
             # and hidden-input replay patterns).
-            submitted[fid] = (
-                existing_page.get(fid)
-                or (request.form.get(fid) or "").strip()
-                or None
-            )
+            submitted[fid] = existing_page.get(fid) or (request.form.get(fid) or "").strip() or None
 
     errors = {**validate_page(page, submitted), **upload_errors}
 
@@ -589,9 +581,7 @@ def save_page(app_id: int, page_id: str):
     if errors:
         # Roll back any staged Document rows — the page wasn't fully valid.
         db.session.rollback()
-        return _render_form_page(
-            application, form, page, submitted, errors=errors, status_code=400
-        )
+        return _render_form_page(application, form, page, submitted, errors=errors, status_code=400)
 
     application.answers_json = merge_page_answers(
         application.answers_json or {}, page_id, submitted
@@ -652,9 +642,11 @@ def submit(app_id: int):
     # Claude call itself errors out later. See :mod:`app.assessor_ai`.
     try:
         from app.assessor_ai import queue_assessment
+
         queue_assessment(application.id)
     except Exception as exc:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).warning(
             "AI assessment could not be queued for app %s: %s", application.id, exc
         )

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from app.forms_runner import EligibilityResult, SUPPORTED_FIELD_TYPES
+from app.forms_runner import SUPPORTED_FIELD_TYPES, EligibilityResult
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -70,7 +70,13 @@ def test_eligibility_schema_expected_field_ids():
     """All five eligibility rule IDs must have a corresponding form field."""
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     field_ids = {f["id"] for f in schema["pages"][0]["fields"]}
-    expected = {"org_type", "operates_in_england", "annual_income", "years_serving_homeless", "la_endorsement"}
+    expected = {
+        "org_type",
+        "operates_in_england",
+        "annual_income",
+        "years_serving_homeless",
+        "la_endorsement",
+    }
     assert expected == field_ids
 
 
@@ -87,9 +93,7 @@ def test_eligibility_schema_all_field_types_supported():
 def test_eligibility_schema_all_fields_required():
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     for field in schema["pages"][0]["fields"]:
-        assert field.get("required") is True, (
-            f"Field {field['id']!r} should be required"
-        )
+        assert field.get("required") is True, f"Field {field['id']!r} should be required"
 
 
 def test_eligibility_schema_radio_fields_have_options():

@@ -17,9 +17,7 @@ from typing import Any, Protocol, runtime_checkable
 log = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS: float = 5.0
-DEFAULT_USER_AGENT: str = (
-    "grants-platform/0.1 (+https://github.com/thebobblysocks/grants-platform)"
-)
+DEFAULT_USER_AGENT: str = "grants-platform/0.1 (+https://github.com/thebobblysocks/grants-platform)"
 
 
 class ExternalValidatorError(Exception):

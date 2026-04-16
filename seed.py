@@ -50,9 +50,7 @@ def validate_grant_config(config: dict, path: Path) -> None:
 
     weights = sum(c["weight"] for c in config["criteria"])
     if weights != 100:
-        raise ValueError(
-            f"{path}: criterion weights must sum to 100 (got {weights})"
-        )
+        raise ValueError(f"{path}: criterion weights must sum to 100 (got {weights})")
 
     ids = [c["id"] for c in config["criteria"]]
     if len(ids) != len(set(ids)):
@@ -81,9 +79,7 @@ def upsert_form(grant: Grant, form_id: str) -> Form:
     version = int(schema.get("version", 1))
 
     form = db.session.execute(
-        select(Form).where(
-            Form.grant_id == grant.id, Form.kind == kind, Form.version == version
-        )
+        select(Form).where(Form.grant_id == grant.id, Form.kind == kind, Form.version == version)
     ).scalar_one_or_none()
 
     if form is None:
