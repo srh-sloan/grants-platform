@@ -190,6 +190,119 @@ def test_ehcf_local_challenge_and_project_summary_have_word_limit():
 
 
 # ---------------------------------------------------------------------------
+# Numeric format validation (number / currency)
+# ---------------------------------------------------------------------------
+
+_NUMBER_PAGE = {
+    "fields": [
+        {"id": "count", "type": "number", "label": "Count", "required": True},
+    ]
+}
+
+_CURRENCY_PAGE = {
+    "fields": [
+        {"id": "amount", "type": "currency", "label": "Amount", "required": True},
+    ]
+}
+
+_OPTIONAL_NUMBER_PAGE = {
+    "fields": [
+        {"id": "count", "type": "number", "label": "Count", "required": False},
+    ]
+}
+
+
+def test_number_rejects_non_numeric_text():
+    errors = validate_page(_NUMBER_PAGE, {"count": "Numquam explicabo R"})
+    assert "count" in errors
+    assert errors["count"] == "Enter a number"
+
+
+def test_number_accepts_integer_string():
+    assert validate_page(_NUMBER_PAGE, {"count": "42"}) == {}
+
+
+def test_number_accepts_decimal_string():
+    assert validate_page(_NUMBER_PAGE, {"count": "3.14"}) == {}
+
+
+def test_number_accepts_negative():
+    assert validate_page(_NUMBER_PAGE, {"count": "-5"}) == {}
+
+
+def test_number_accepts_native_int():
+    assert validate_page(_NUMBER_PAGE, {"count": 42}) == {}
+
+
+def test_currency_rejects_non_numeric_text():
+    errors = validate_page(_CURRENCY_PAGE, {"amount": "Numquam explicabo R"})
+    assert "amount" in errors
+    assert errors["amount"] == "Enter an amount, like 50000"
+
+
+def test_currency_accepts_plain_number():
+    assert validate_page(_CURRENCY_PAGE, {"amount": "50000"}) == {}
+
+
+def test_currency_accepts_formatted_with_commas_and_pound():
+    assert validate_page(_CURRENCY_PAGE, {"amount": "£50,000"}) == {}
+    assert validate_page(_CURRENCY_PAGE, {"amount": "50,000"}) == {}
+    assert validate_page(_CURRENCY_PAGE, {"amount": "£50000"}) == {}
+
+
+def test_number_empty_required_reports_required_not_format():
+    errors = validate_page(_NUMBER_PAGE, {"count": ""})
+    assert errors == {"count": "This field is required"}
+
+
+def test_number_empty_optional_no_error():
+    assert validate_page(_OPTIONAL_NUMBER_PAGE, {"count": ""}) == {}
+
+
+def test_number_whitespace_only_treated_as_empty_required():
+    errors = validate_page(_NUMBER_PAGE, {"count": "   "})
+    assert errors == {"count": "This field is required"}
+
+
+def test_number_rejects_value_with_trailing_letters():
+    errors = validate_page(_NUMBER_PAGE, {"count": "42abc"})
+    assert "count" in errors
+
+
+def test_numeric_validation_skipped_for_hidden_field():
+    """A hidden number field must not be validated, even with rubbish value."""
+    page = {
+        "fields": [
+            {
+                "id": "funding_type",
+                "type": "radio",
+                "label": "Funding type",
+                "required": True,
+                "options": [
+                    {"value": "revenue", "label": "Revenue"},
+                    {"value": "capital", "label": "Capital"},
+                ],
+            },
+            {
+                "id": "capital_amount",
+                "type": "currency",
+                "label": "Capital amount",
+                "required": True,
+                "visible_when": {
+                    "field": "funding_type",
+                    "operator": "equals",
+                    "value": "capital",
+                },
+            },
+        ]
+    }
+    errors = validate_page(
+        page, {"funding_type": "revenue", "capital_amount": "garbage"}
+    )
+    assert errors == {}
+
+
+# ---------------------------------------------------------------------------
 # Conditional visibility — is_field_visible (P4.3)
 # ---------------------------------------------------------------------------
 
