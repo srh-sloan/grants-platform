@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% from 'govuk_frontend_jinja/components/tag/macro.html' import govukTag %}
+
+{% block title %}Allocation dashboard{% endblock %}
+
+{% set REC_TAG = {
+  "fund":   "govuk-tag--green",
+  "reject": "govuk-tag--red",
+  "refer":  "govuk-tag--yellow"
+} %}
+
+{% block content %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-full">
+
+    <a class="govuk-back-link" href="{{ url_for('assessor.queue') }}">Back to queue</a>
+
+    <h1 class="govuk-heading-xl govuk-!-margin-top-4">Allocation dashboard</h1>
+
+    <p class="govuk-body">
+      Total fund budget: <strong>
+        &pound;{{ "{:,.0f}".format(total_budget) }}
+      </strong>
+    </p>
+
+    {% if rows %}
+      {% set ns = namespace(cumulative=0, rank=0) %}
+
+      <table class="govuk-table">
+        <caption class="govuk-table__caption govuk-visually-hidden">Applications ranked by assessment score</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th class="govuk-table__header">Rank</th>
+            <th class="govuk-table__header">Organisation</th>
+            <th class="govuk-table__header">Grant</th>
+            <th class="govuk-table__header">Weighted score</th>
+            <th class="govuk-table__header">Recommendation</th>
+            <th class="govuk-table__header">Status</th>
+            <th class="govuk-table__header">Cumulative awarded</th>
+            <th class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          {% for application, assessment in rows %}
+            {% set ns.rank = ns.rank + 1 %}
+            {% set auto_rejected = assessment.notes_json and assessment.notes_json.get("_flagged") %}
+
+            {# Estimate award as midpoint of grant range #}
+            {% if application.grant %}
+              {% set award_ranges = application.grant.config_json.get("award_ranges", {}) %}
+              {% set mid_award = ((award_ranges.get("revenue_min", 50000) + award_ranges.get("revenue_max", 200000)) / 2) | int %}
+            {% else %}
+              {% set mid_award = 125000 %}
+            {% endif %}
+
+            {% if assessment.recommendation and assessment.recommendation.value == "fund" %}
+              {% set ns.cumulative = ns.cumulative + mid_award %}
+            {% endif %}
+
+            {% set over_budget = ns.cumulative > total_budget %}
+
+            <tr class="govuk-table__row {% if over_budget %}govuk-!-background-colour-red{% endif %}">
+              <td class="govuk-table__cell">{{ ns.rank }}</td>
+              <td class="govuk-table__cell">
+                {{ application.organisation.name if application.organisation else "—" }}
+              </td>
+              <td class="govuk-table__cell">
+                {{ application.grant.name if application.grant else "—" }}
+              </td>
+              <td class="govuk-table__cell">
+                {% if assessment.weighted_total is not none %}
+                  <strong>{{ assessment.weighted_total }}</strong>
+                {% else %}
+                  <span class="govuk-hint">—</span>
+                {% endif %}
+              </td>
+              <td class="govuk-table__cell">
+                {% if assessment.recommendation %}
+                  {{ govukTag({
+                    "text": assessment.recommendation.value | title,
+                    "classes": REC_TAG.get(assessment.recommendation.value, "govuk-tag--grey")
+                  }) }}
+                {% else %}
+                  <span class="govuk-hint">Pending</span>
+                {% endif %}
+              </td>
+              <td class="govuk-table__cell">
+                {{ application.status.value | replace("_", " ") | title }}
+              </td>
+              <td class="govuk-table__cell">
+                {% if assessment.recommendation and assessment.recommendation.value == "fund" %}
+                  &pound;{{ "{:,.0f}".format(ns.cumulative) }}
+                  {% if over_budget %}
+                    {{ govukTag({"text": "Over budget", "classes": "govuk-tag--red"}) }}
+                  {% endif %}
+                {% else %}
+                  <span class="govuk-hint">—</span>
+                {% endif %}
+              </td>
+              <td class="govuk-table__cell">
+                <a class="govuk-link" href="{{ url_for('assessor.application_detail', app_id=application.id) }}">
+                  Review<span class="govuk-visually-hidden"> application {{ application.id }}</span>
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <p class="govuk-body govuk-!-margin-top-4">
+        <strong>Total committed (fund recommendations only):</strong>
+        &pound;{{ "{:,.0f}".format(ns.cumulative) }}
+        of &pound;{{ "{:,.0f}".format(total_budget) }} available
+        {% if ns.cumulative <= total_budget %}
+          ({{ "{:,.0f}".format(total_budget - ns.cumulative) }} remaining)
+        {% else %}
+          {{ govukTag({"text": "Over budget by £" + "{:,.0f}".format(ns.cumulative - total_budget), "classes": "govuk-tag--red"}) }}
+        {% endif %}
+      </p>
+
+    {% else %}
+      <p class="govuk-body">No assessed applications yet.</p>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
