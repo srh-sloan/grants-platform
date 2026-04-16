@@ -68,6 +68,21 @@ class AssessmentRecommendation(str, enum.Enum):
     REFER = "refer"
 
 
+class AssessmentStatus(str, enum.Enum):
+    """Lifecycle of an AI assessment row.
+
+    Human-scored assessments start as :attr:`COMPLETED` (they're written in one
+    shot by the scoring form). AI assessments move through
+    :attr:`PENDING` → :attr:`IN_PROGRESS` → :attr:`COMPLETED` or
+    :attr:`FAILED` as the background worker progresses.
+    """
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
@@ -214,7 +229,25 @@ class Assessment(db.Model):
     recommendation: Mapped[AssessmentRecommendation | None] = mapped_column(
         SAEnum(AssessmentRecommendation, native_enum=False)
     )
+    # Background-task lifecycle for AI-generated assessments. Defaults to
+    # COMPLETED so rows created synchronously by human assessors (and legacy
+    # AI rows from before async landed) remain in a valid terminal state
+    # without any backfill.
+    status: Mapped[AssessmentStatus] = mapped_column(
+        SAEnum(AssessmentStatus, native_enum=False),
+        nullable=False,
+        default=AssessmentStatus.COMPLETED,
+    )
+    started_at: Mapped[datetime | None] = mapped_column()
     completed_at: Mapped[datetime | None] = mapped_column()
+    # Truncated exception message when :attr:`status` is FAILED. Surfaced in
+    # the assessor UI so a human can decide whether to retry.
+    error_message: Mapped[str | None] = mapped_column(db.String(500))
 
     application: Mapped[Application] = relationship(back_populates="assessments")
     assessor: Mapped[User] = relationship(back_populates="assessments")
+
+    @property
+    def is_pending_ai(self) -> bool:
+        """True while the AI worker has a row queued or in-flight."""
+        return self.status in (AssessmentStatus.PENDING, AssessmentStatus.IN_PROGRESS)

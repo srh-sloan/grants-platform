@@ -641,13 +641,19 @@ def submit(app_id: int):
     application.submitted_at = datetime.now(UTC)
     db.session.commit()
 
-    # Trigger AI assessment fire-and-forget -- failures are logged, never shown to applicant.
+    # Enqueue AI assessment on the background pool so the applicant's
+    # submission response isn't held up by the Claude round-trip. Failures to
+    # *queue* (missing key, grant has no criteria) are logged but never shown
+    # to the applicant — the assessor sees a row with FAILED status if the
+    # Claude call itself errors out later. See :mod:`app.assessor_ai`.
     try:
-        from app.assessor_ai import assess_application
-        assess_application(application.id)
+        from app.assessor_ai import queue_assessment
+        queue_assessment(application.id)
     except Exception as exc:  # noqa: BLE001
         import logging
-        logging.getLogger(__name__).warning("AI assessment failed for app %s: %s", application.id, exc)
+        logging.getLogger(__name__).warning(
+            "AI assessment could not be queued for app %s: %s", application.id, exc
+        )
 
     flash(
         f"Application submitted to {application.grant.name}. "

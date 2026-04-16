@@ -56,6 +56,14 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     _register_cli(app)
     _register_external_validators(app)
 
+    # Background task runner for post-submission AI assessment. Must sit after
+    # blueprints so callers (queue_assessment) see a fully-wired app, and
+    # before the auto-seed hook because seeding is request-scoped and doesn't
+    # depend on the executor.
+    from app.tasks import init_task_runner
+
+    init_task_runner(app)
+
     # Auto-seed in dev so `flask run` boots straight into a usable DB. Tests
     # manage their own fixtures, so skip when TESTING is set.
     if not app.config.get("TESTING"):

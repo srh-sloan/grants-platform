@@ -860,22 +860,51 @@ def generate_monitoring(app_id: int):
 @bp.post("/<int:app_id>/run-ai")
 @assessor_required
 def trigger_ai(app_id: int):
+    """Manual trigger / retry for AI assessment.
+
+    Two entry shapes:
+
+    * No existing row → queue a fresh PENDING assessment. The background
+      worker fills in scores; the detail page auto-refreshes while PENDING.
+    * Existing FAILED row → :func:`queue_assessment` resets it and requeues
+      so the assessor can retry without deleting the row.
+
+    Existing COMPLETED / PENDING / IN_PROGRESS rows short-circuit with an
+    informational flash — we don't want a second Claude call to clobber a
+    completed result.
+    """
+    # Validate the app exists (404 if not) but we don't need the instance —
+    # queue_assessment does its own lookup by ID.
     _get_application_or_404(app_id)
     form = _CsrfForm()
     if not form.validate_on_submit():
         abort(400)
 
+    from app.assessor_ai import queue_assessment
+    from app.models import AssessmentStatus
+
     existing = Assessment.query.filter_by(application_id=app_id).first()
-    if existing is not None:
+    if existing is not None and existing.status == AssessmentStatus.COMPLETED:
         flash("AI assessment already exists for this application.", "warning")
         return _redirect_to_detail(app_id)
+    if existing is not None and existing.status in (
+        AssessmentStatus.PENDING,
+        AssessmentStatus.IN_PROGRESS,
+    ):
+        flash("AI assessment is already in progress.", "info")
+        return _redirect_to_detail(app_id)
 
-    from app.assessor_ai import assess_application
-    assessment = assess_application(app_id)
+    assessment = queue_assessment(app_id)
     if assessment is None:
-        flash("AI assessment failed -- check ANTHROPIC_API_KEY is set and the application has answers.", "error")
+        flash(
+            "AI assessment could not be queued -- check ANTHROPIC_API_KEY is set "
+            "and the grant defines scoring criteria.",
+            "error",
+        )
+    elif existing is not None:  # retry path
+        flash("AI assessment queued for retry.", "success")
     else:
-        flash("AI assessment complete.", "success")
+        flash("AI assessment queued. It will appear here shortly.", "success")
     return _redirect_to_detail(app_id)
 
 
@@ -915,6 +944,7 @@ def allocation():
 @bp.get("/users")
 @admin_required
 def list_users():
+    _admin_required()
     users = db.session.execute(
         select(User).where(
             User.role.in_([UserRole.ASSESSOR, UserRole.ADMIN])
@@ -927,6 +957,7 @@ def list_users():
 @bp.route("/users/new", methods=["GET", "POST"])
 @admin_required
 def create_user():
+    _admin_required()
     form = CreateAssessorForm()
     if form.validate_on_submit():
         email = (form.email.data or "").strip().lower()
@@ -946,6 +977,7 @@ def create_user():
 @bp.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
 @admin_required
 def edit_user(user_id: int):
+    _admin_required()
     user = db.session.get(User, user_id)
     # Only assessor/admin accounts are managed from this surface -- the
     # accounts page intentionally excludes applicants.

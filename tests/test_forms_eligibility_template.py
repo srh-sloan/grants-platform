@@ -27,9 +27,15 @@ from app.forms_runner import EligibilityResult, SUPPORTED_FIELD_TYPES
 SCHEMA_PATH = Path(__file__).parent.parent / "app" / "forms" / "ehcf-eligibility-v1.json"
 
 
-def _make_grant(name: str = "Ending Homelessness in Communities Fund"):
+def _make_grant(
+    name: str = "Ending Homelessness in Communities Fund",
+    contact_email: str | None = "ehcf@communities.gov.uk",
+):
     """Return a minimal namespace that quacks like a Grant model for templates."""
-    return types.SimpleNamespace(name=name)
+    config_json: dict[str, object] = {}
+    if contact_email is not None:
+        config_json["contact_email"] = contact_email
+    return types.SimpleNamespace(name=name, config_json=config_json)
 
 
 # ---------------------------------------------------------------------------
@@ -243,13 +249,31 @@ def test_failing_result_shows_check_your_answers_link(app, failing_result):
     assert check_url in html
 
 
-def test_failing_result_shows_contact_email(app, failing_result):
+def test_failing_result_shows_contact_email_from_grant_config(app, failing_result):
+    """The contact email must come from grant.config_json, not be hardcoded."""
+    custom_email = "support@example.gov.uk"
     html = _render(
         app,
         "forms/eligibility_result.html",
         result=failing_result,
-        grant=_make_grant(),
+        grant=_make_grant(contact_email=custom_email),
         continue_url="/apply/start",
         check_url="/apply/eligibility",
     )
-    assert "ehcf@communities.gov.uk" in html
+    assert custom_email in html
+    assert f"mailto:{custom_email}" in html
+    # The previously-hardcoded EHCF address must not leak through for other grants.
+    assert "ehcf@communities.gov.uk" not in html
+
+
+def test_failing_result_omits_contact_block_when_no_email_configured(app, failing_result):
+    """If grant config has no contact_email, the contact bullet is hidden."""
+    html = _render(
+        app,
+        "forms/eligibility_result.html",
+        result=failing_result,
+        grant=_make_grant(contact_email=None),
+        continue_url="/apply/start",
+        check_url="/apply/eligibility",
+    )
+    assert "mailto:" not in html

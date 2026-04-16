@@ -16,7 +16,7 @@
   Failing state  (result.passed == False):
     Renders a GOV.UK warning text block, lists each failing rule by its
     human-readable label (result.labels[rule_id]), a link back to check_url,
-    and the EHCF contact address.
+    and (when configured) the grant's contact email from grant.config_json.
 #}
 {% extends "base.html" %}
 
@@ -71,9 +71,12 @@
           {% endfor %}
         </ul>
 
-        {{ govukInsetText({
-          "html": "If you believe this is incorrect, contact <a class=\"govuk-link\" href=\"mailto:ehcf@communities.gov.uk\">ehcf@communities.gov.uk</a>."
-        }) }}
+        {% set contact_email = grant.config_json.get("contact_email") if grant.config_json else None %}
+        {% if contact_email %}
+          {{ govukInsetText({
+            "html": "If you believe this is incorrect, contact <a class=\"govuk-link\" href=\"mailto:" ~ contact_email ~ "\">" ~ contact_email ~ "</a>."
+          }) }}
+        {% endif %}
 
         <p class="govuk-body">
           <a href="{{ check_url }}" class="govuk-link">Check your answers</a>
