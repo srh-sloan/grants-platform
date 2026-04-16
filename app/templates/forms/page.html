@@ -9,10 +9,12 @@
     errors       — {field_id: "message"} (may be empty)
     action_url   — POST target (built by Stream A)
     back_url     — optional previous-page URL (built by Stream A)
+    page_number  — (optional) 1-based index of this page; omit or pass None
+    total_pages  — (optional) total number of pages; omit or pass None
 
-  Stream B fills this in properly in Phase 2 (P2.1) — renders field macros per
-  type, renders a GOV.UK error summary, "Save and continue" / "Back" buttons.
-  Until then this placeholder keeps Stream A's route bootable.
+  When both page_number and total_pages are provided the template renders a
+  "Page X of Y" progress line above the page heading. Stream A computes these
+  by calling forms_runner.get_page_position(schema, page_id).
 #}
 {% extends "base.html" %}
 
@@ -22,6 +24,9 @@
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
       <span class="govuk-caption-l">{{ application.grant.name }}</span>
+      {% if page_number and total_pages %}
+        <p class="govuk-body-s govuk-!-colour-secondary">Page {{ page_number }} of {{ total_pages }}</p>
+      {% endif %}
       <h1 class="govuk-heading-xl">{{ page.title }}</h1>
 
       <div class="govuk-inset-text">

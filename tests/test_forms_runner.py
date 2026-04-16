@@ -7,6 +7,7 @@ import pytest
 from app.forms_runner import (
     SUPPORTED_FIELD_TYPES,
     get_page,
+    get_page_position,
     list_pages,
     merge_page_answers,
     next_page_id,
@@ -83,3 +84,36 @@ def test_supported_field_types_match_contract():
     assert frozenset(
         {"text", "textarea", "radio", "checkbox", "select", "number", "currency", "date", "file"}
     ) == SUPPORTED_FIELD_TYPES
+
+
+# ---------------------------------------------------------------------------
+# get_page_position (P2.1)
+# ---------------------------------------------------------------------------
+
+_THREE_PAGE_SCHEMA = {
+    "id": "multi",
+    "version": 1,
+    "kind": "application",
+    "pages": [
+        {"id": "a", "title": "A", "fields": []},
+        {"id": "b", "title": "B", "fields": []},
+        {"id": "c", "title": "C", "fields": []},
+    ],
+}
+
+
+def test_get_page_position_first_page():
+    assert get_page_position(_THREE_PAGE_SCHEMA, "a") == (1, 3)
+
+
+def test_get_page_position_last_page():
+    assert get_page_position(_THREE_PAGE_SCHEMA, "c") == (3, 3)
+
+
+def test_get_page_position_middle_page():
+    assert get_page_position(_THREE_PAGE_SCHEMA, "b") == (2, 3)
+
+
+def test_get_page_position_unknown_raises():
+    with pytest.raises(ValueError, match="not found in schema"):
+        get_page_position(_THREE_PAGE_SCHEMA, "missing")
