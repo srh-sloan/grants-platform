@@ -394,20 +394,24 @@ def save_score(app_id: int):
 
     old_scores = assessment.scores_json or {}
     old_notes = assessment.notes_json or {}
-    # Preserve gate keys and internal metadata alongside criterion scores
-    assessment.scores_json = {
-        **scores,
-        "_eligibility_passed": old_scores.get("_eligibility_passed"),
-        "_declaration_passed": old_scores.get("_declaration_passed"),
-    }
-    assessment.notes_json = {
-        **notes,
-        "_eligibility_notes": old_notes.get("_eligibility_notes", ""),
-        "_declaration_notes": old_notes.get("_declaration_notes", ""),
-        "_gap_analysis": old_notes.get("_gap_analysis", ""),
-        "_decision_notes": old_notes.get("_decision_notes", ""),
-        "_flagged": old_notes.get("_flagged", False),
-    }
+    # Preserve gate keys — only carry forward non-None values
+    preserved_scores: dict = {}
+    for key in ("_eligibility_passed", "_declaration_passed"):
+        val = old_scores.get(key)
+        if val is not None:
+            preserved_scores[key] = val
+    assessment.scores_json = {**scores, **preserved_scores}
+    # Preserve internal metadata — only carry forward non-empty values
+    preserved_notes: dict = {}
+    for key in ("_eligibility_notes", "_declaration_notes", "_gap_analysis",
+                "_decision_notes"):
+        val = old_notes.get(key)
+        if val:
+            preserved_notes[key] = val
+    flagged = old_notes.get("_flagged")
+    if flagged:
+        preserved_notes["_flagged"] = flagged
+    assessment.notes_json = {**notes, **preserved_notes}
     assessment.weighted_total = weighted_total
     if auto_rejected:
         assessment.recommendation = AssessmentRecommendation.REJECT

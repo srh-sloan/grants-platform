@@ -25,13 +25,13 @@ def calculate_weighted_score(scores: dict[str, int], criteria: Iterable[dict]) -
     Missing criteria in ``scores`` are treated as zero, so a partially-filled
     assessment still yields a number (useful for progress displays).
     """
-    return sum(int(scores.get(c["id"], 0)) * int(c["weight"]) for c in criteria)
+    return sum(int(scores.get(c["id"]) or 0) * int(c["weight"]) for c in criteria)
 
 
 def has_auto_reject(scores: dict[str, int], criteria: Iterable[dict]) -> bool:
     """True if any criterion flagged ``auto_reject_on_zero`` scored 0."""
     return any(
-        int(scores.get(c["id"], 0)) == 0
+        int(scores.get(c["id"]) or 0) == 0
         for c in criteria
         if c.get("auto_reject_on_zero")
     )
