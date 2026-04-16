@@ -26,3 +26,24 @@
 .app-row--over-budget {
   background-color: #f3d3c9;
 }
+
+/* Grant list on the landing page — give each grant card breathing room and a
+   visible divider so multiple open grants don't run together. */
+.app-grant-list {
+  margin-top: 0;
+}
+
+.app-grant-list__item {
+  padding-top: 30px;
+  padding-bottom: 30px;
+  border-top: 1px solid #b1b4b6;
+}
+
+.app-grant-list__item:first-child {
+  padding-top: 10px;
+  border-top: 0;
+}
+
+.app-grant-list__item:last-child {
+  padding-bottom: 10px;
+}
