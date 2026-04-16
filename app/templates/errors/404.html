@@ -4,10 +4,11 @@
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
       <h1 class="govuk-heading-xl">Page not found</h1>
-      <p class="govuk-body">If you typed the web address, check it was correct.</p>
-      <p class="govuk-body">
-        <a class="govuk-link" href="{{ url_for('public.index') }}">Go to the homepage</a>
-      </p>
+      <p class="govuk-body">If you typed the web address, check it is correct.</p>
+      <p class="govuk-body">If you followed a link, it may have changed or the page may have moved.</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><a class="govuk-link" href="{{ url_for('public.index') }}">Go to the homepage</a></li>
+      </ul>
     </div>
   </div>
 {% endblock %}

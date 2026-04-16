@@ -4,7 +4,11 @@
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
       <h1 class="govuk-heading-xl">Sorry, there is a problem with the service</h1>
-      <p class="govuk-body">Try again later.</p>
+      <p class="govuk-body">Try refreshing the page. If the problem continues:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>go to the <a class="govuk-link" href="{{ url_for('public.index') }}">homepage</a> and start again</li>
+        <li>contact <a class="govuk-link" href="mailto:ehcf@communities.gov.uk">ehcf@communities.gov.uk</a> if you were in the middle of submitting an application</li>
+      </ul>
     </div>
   </div>
 {% endblock %}

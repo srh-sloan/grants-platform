@@ -21,3 +21,8 @@
 .app-service-navigation__button:hover {
   text-decoration: underline;
 }
+
+/* Over-budget row highlight for the allocation dashboard table */
+.app-row--over-budget {
+  background-color: #f3d3c9;
+}
