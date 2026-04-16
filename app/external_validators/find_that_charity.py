@@ -33,6 +33,9 @@ from app.external_validators.base import (
 
 log = logging.getLogger(__name__)
 
+# SSRF protection: only ever contact the canonical FindThatCharity host.
+_ALLOWED_BASE_URL = "https://findthatcharity.uk"
+
 _CHARITY_PATH = "/charity/{number}.json"
 _COMPANY_PATH = "/company/{number}.json"
 
@@ -59,8 +62,15 @@ class FindThatCharityValidator:
         *,
         fetcher: JsonFetcher = http_get_json,
         timeout: float = 5.0,
-        base_url: str = "https://findthatcharity.uk",
+        base_url: str = _ALLOWED_BASE_URL,
     ) -> None:
+        # SSRF guard: when using the real HTTP fetcher, only the canonical host
+        # is permitted. Tests inject a fake fetcher so the URL never hits the
+        # network — they can supply any base_url for URL-construction assertions.
+        if fetcher is http_get_json and base_url.rstrip("/") != _ALLOWED_BASE_URL:
+            raise ValueError(
+                f"base_url must be '{_ALLOWED_BASE_URL}' when using the default HTTP fetcher."
+            )
         self._fetch = fetcher
         self._timeout = timeout
         self._base_url = base_url.rstrip("/")

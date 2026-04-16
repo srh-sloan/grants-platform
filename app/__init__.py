@@ -37,6 +37,19 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     WTFormsHelpers(app)
 
     db.init_app(app)
+
+    # SQLite ignores FK constraints by default. Enable them on every new
+    # connection so referential integrity is actually enforced.
+    from sqlalchemy import event
+
+    with app.app_context():
+
+        @event.listens_for(db.engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
     # Suppress Flask-Login's default "Please log in to access this page." flash.
@@ -61,6 +74,14 @@ def create_app(config_class: str | type = "config.Config") -> Flask:
     _register_security_headers(app)
     _register_cli(app)
     _register_external_validators(app)
+
+    # Background task runner for post-submission AI assessment. Must sit after
+    # blueprints so callers (queue_assessment) see a fully-wired app, and
+    # before the auto-seed hook because seeding is request-scoped and doesn't
+    # depend on the executor.
+    from app.tasks import init_task_runner
+
+    init_task_runner(app)
 
     # Auto-seed in dev so `flask run` boots straight into a usable DB. Tests
     # manage their own fixtures, so skip when TESTING is set.
@@ -161,6 +182,7 @@ def _register_security_headers(app: Flask) -> None:
         headers = response.headers
         headers.setdefault("X-Content-Type-Options", "nosniff")
         headers.setdefault("X-Frame-Options", "DENY")
+        headers.setdefault("X-XSS-Protection", "1; mode=block")
         headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         headers.setdefault(
             "Permissions-Policy",

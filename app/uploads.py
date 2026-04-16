@@ -17,6 +17,7 @@ Download route lives at ``/uploads/<doc_id>`` (authz-gated).
 from __future__ import annotations
 
 import os
+import re as _re
 
 from flask import Blueprint, abort, current_app, send_from_directory, url_for
 from flask_login import current_user, login_required
@@ -34,6 +35,44 @@ class UploadRejected(ValueError):
     """Raised when an upload fails validation (size, MIME, etc)."""
 
 
+# `kind` is used as a sub-directory name inside UPLOAD_FOLDER.
+# Restrict to safe characters to prevent path traversal: alphanumeric,
+# underscores, and hyphens only — no slashes, dots, or spaces.
+_SAFE_KIND_RE = _re.compile(r"^[A-Za-z0-9_-]+$")
+
+# Allowed file extensions and their expected MIME type prefix.
+# We check both the extension and the first few bytes (magic numbers) to
+# prevent bypass via renamed executables.
+_ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".odt",
+        ".xls",
+        ".xlsx",
+        ".ods",
+        ".csv",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+    }
+)
+
+# Magic-byte signatures for each allowed content category.
+# Format: {label: [(offset, bytes_to_match), ...]}
+_MAGIC_SIGNATURES: list[tuple[bytes, str]] = [
+    (b"%PDF", "PDF"),
+    (b"\xd0\xcf\x11\xe0", "Office legacy (doc/xls)"),  # OLE2 compound doc
+    (b"PK\x03\x04", "Office Open XML / ODP / ODS (zip-based)"),  # ZIP (docx/xlsx/ods)
+    (b"\x89PNG", "PNG"),
+    (b"\xff\xd8\xff", "JPEG"),
+    (b"GIF87a", "GIF"),
+    (b"GIF89a", "GIF"),
+]
+
+
 # ---------------------------------------------------------------------------
 # Public helpers (consumed by Streams A and C)
 # ---------------------------------------------------------------------------
@@ -49,10 +88,32 @@ def save_upload(
     Storage layout: ``UPLOAD_FOLDER/<application_id>/<kind>/<filename>``.
     Raises :class:`UploadRejected` on validation failure.
     """
+    if not _SAFE_KIND_RE.match(kind):
+        raise UploadRejected(
+            f"Upload kind '{kind}' contains invalid characters. "
+            "Only letters, digits, underscores, and hyphens are allowed."
+        )
+
     original_filename = file_storage.filename or ""
     safe_name = secure_filename(original_filename)
     if not safe_name:
         raise UploadRejected("Filename is empty or contains only unsafe characters")
+
+    ext = os.path.splitext(safe_name)[1].lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise UploadRejected(
+            f"File type '{ext}' is not allowed. "
+            f"Accepted types: {', '.join(sorted(_ALLOWED_EXTENSIONS))}"
+        )
+
+    # Read enough bytes to check magic numbers, then seek back before saving.
+    header = file_storage.read(8)
+    file_storage.seek(0)
+    if not any(header.startswith(sig) for sig, _ in _MAGIC_SIGNATURES):
+        raise UploadRejected(
+            "The file content does not match an accepted file type. "
+            "Please upload a PDF, Word document, spreadsheet, or image."
+        )
 
     upload_folder = current_app.config["UPLOAD_FOLDER"]
     relative_dir = os.path.join(str(application.id), kind)
@@ -71,7 +132,10 @@ def save_upload(
         filename=original_filename,
     )
     db.session.add(doc)
-    db.session.commit()
+    # flush (not commit) so the Document gets an ID but stays inside the
+    # caller's transaction — rollback still retracts the row if later
+    # validation fails in the same request.
+    db.session.flush()
     return doc
 
 
@@ -124,4 +188,5 @@ def serve_document(doc_id: int):
         upload_folder,
         doc.storage_path,
         download_name=doc.filename,
+        as_attachment=True,
     )

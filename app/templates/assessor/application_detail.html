@@ -9,6 +9,16 @@
 
 {% block title %}Application {{ application.id }} -- {{ (application.organisation.name | trim) if application.organisation else "Unknown" }}{% endblock %}
 
+{# Auto-refresh the detail view while the AI assessment is in flight so the
+   assessor doesn't have to F5. Meta refresh is intentional — no JS dependency,
+   works offline from the toolchain, and only fires on the pending state. #}
+{% block head %}
+  {{ super() }}
+  {% if assessment and assessment.is_pending_ai %}
+    <meta http-equiv="refresh" content="5">
+  {% endif %}
+{% endblock %}
+
 {% set STATUS_TAG = {
   "submitted":    "govuk-tag--purple",
   "under_review": "govuk-tag--yellow",
@@ -75,7 +85,7 @@
 
     {% if application.answers_json %}
       {% for page_id, page_answers in application.answers_json.items() %}
-        <h3 class="govuk-heading-m govuk-!-text-transform-capitalize">
+        <h3 class="govuk-heading-m">
           {{ page_id | replace("_", " ") | replace("-", " ") | title }}
         </h3>
         {% if page_answers is mapping %}
@@ -193,11 +203,38 @@
     <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
 
     {# ================================================================ #}
-    {# AI assessment summary (unchanged position)                       #}
+    {# AI assessment summary (status-aware)                             #}
     {# ================================================================ #}
-    {% if assessment %}
-      <h2 class="govuk-heading-l">AI assessment</h2>
+    <h2 class="govuk-heading-l">AI assessment</h2>
 
+    {% set ai_status = assessment.status.value if assessment else None %}
+
+    {% if ai_status in ("pending", "in_progress") %}
+      {# Background worker is on it. Page auto-refreshes every 5s via the
+         meta refresh in {% block head %}. #}
+      {{ govukTag({
+        "text": "AI assessment " + (ai_status | replace("_", " ")),
+        "classes": "govuk-tag--blue"
+      }) }}
+      {{ govukInsetText({
+        "text": "AI scoring is running in the background. This page will refresh automatically when it completes (usually within a minute)."
+      }) }}
+
+    {% elif ai_status == "failed" %}
+      {{ govukTag({"text": "AI assessment failed", "classes": "govuk-tag--red"}) }}
+      {{ govukWarningText({
+        "text": "The AI assessor could not score this application: "
+                ~ (assessment.error_message or "unknown error")
+                ~ ". Retry, or proceed with manual scoring below.",
+        "iconFallbackText": "Warning"
+      }) }}
+      <form method="post" action="{{ url_for('assessor.trigger_ai', app_id=application.id) }}">
+        {{ form.hidden_tag() }}
+        {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+        <button class="govuk-button govuk-button--secondary" type="submit">Retry AI assessment</button>
+      </form>
+
+    {% elif ai_status == "completed" %}
       {% if assessment.weighted_total is not none %}
         <p class="govuk-body">
           <strong>Weighted total:</strong> {{ assessment.weighted_total }} / {{ max_total }}
@@ -249,7 +286,10 @@
           </tbody>
         </table>
       {% endif %}
+
     {% else %}
+      {# No Assessment row -- e.g. seeded/legacy application, or queue refused
+         because ANTHROPIC_API_KEY is unset. #}
       <p class="govuk-hint govuk-!-margin-bottom-2">No AI assessment yet.</p>
       <form method="post" action="{{ url_for('assessor.trigger_ai', app_id=application.id) }}">
         {{ form.hidden_tag() }}

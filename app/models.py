@@ -68,6 +68,21 @@ class AssessmentRecommendation(str, enum.Enum):
     REFER = "refer"
 
 
+class AssessmentStatus(str, enum.Enum):
+    """Lifecycle of an AI assessment row.
+
+    Human-scored assessments start as :attr:`COMPLETED` (they're written in one
+    shot by the scoring form). AI assessments move through
+    :attr:`PENDING` → :attr:`IN_PROGRESS` → :attr:`COMPLETED` or
+    :attr:`FAILED` as the background worker progresses.
+    """
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
@@ -83,7 +98,7 @@ class Organisation(db.Model):
     profile_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=_utcnow, nullable=False)
 
-    users: Mapped[list[User]] = relationship(back_populates="organisation")
+    users: Mapped[list[User]] = relationship(back_populates="organisation", passive_deletes=True)
     applications: Mapped[list[Application]] = relationship(back_populates="organisation")
 
     @validates("name", "contact_name")
@@ -136,8 +151,10 @@ class Grant(db.Model):
     )
     config_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
-    forms: Mapped[list[Form]] = relationship(back_populates="grant")
-    applications: Mapped[list[Application]] = relationship(back_populates="grant")
+    forms: Mapped[list[Form]] = relationship(back_populates="grant", cascade="all, delete-orphan")
+    applications: Mapped[list[Application]] = relationship(
+        back_populates="grant", cascade="all, delete-orphan"
+    )
 
     @property
     def summary(self) -> str | None:
@@ -148,7 +165,7 @@ class Form(db.Model):
     __tablename__ = "forms"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    grant_id: Mapped[int] = mapped_column(db.ForeignKey("grants.id"), nullable=False)
+    grant_id: Mapped[int] = mapped_column(db.ForeignKey("grants.id"), nullable=False, index=True)
     kind: Mapped[FormKind] = mapped_column(SAEnum(FormKind, native_enum=False), nullable=False)
     version: Mapped[int] = mapped_column(db.Integer, nullable=False, default=1)
     schema_json: Mapped[dict] = mapped_column(JSON, nullable=False)
@@ -158,10 +175,13 @@ class Form(db.Model):
 
 class Application(db.Model):
     __tablename__ = "applications"
+    __table_args__ = (db.UniqueConstraint("org_id", "grant_id", name="uq_application_org_grant"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    org_id: Mapped[int] = mapped_column(db.ForeignKey("organisations.id"), nullable=False)
-    grant_id: Mapped[int] = mapped_column(db.ForeignKey("grants.id"), nullable=False)
+    org_id: Mapped[int] = mapped_column(
+        db.ForeignKey("organisations.id"), nullable=False, index=True
+    )
+    grant_id: Mapped[int] = mapped_column(db.ForeignKey("grants.id"), nullable=False, index=True)
     form_version: Mapped[int] = mapped_column(db.Integer, nullable=False, default=1)
     status: Mapped[ApplicationStatus] = mapped_column(
         SAEnum(ApplicationStatus, native_enum=False),
@@ -175,15 +195,21 @@ class Application(db.Model):
 
     organisation: Mapped[Organisation] = relationship(back_populates="applications")
     grant: Mapped[Grant] = relationship(back_populates="applications")
-    documents: Mapped[list[Document]] = relationship(back_populates="application")
-    assessments: Mapped[list[Assessment]] = relationship(back_populates="application")
+    documents: Mapped[list[Document]] = relationship(
+        back_populates="application", cascade="all, delete-orphan"
+    )
+    assessments: Mapped[list[Assessment]] = relationship(
+        back_populates="application", cascade="all, delete-orphan"
+    )
 
 
 class Document(db.Model):
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    application_id: Mapped[int] = mapped_column(db.ForeignKey("applications.id"), nullable=False)
+    application_id: Mapped[int] = mapped_column(
+        db.ForeignKey("applications.id"), nullable=False, index=True
+    )
     kind: Mapped[str] = mapped_column(db.String(64), nullable=False)
     storage_path: Mapped[str] = mapped_column(db.String(512), nullable=False)
     filename: Mapped[str] = mapped_column(db.String(255), nullable=False)
@@ -196,15 +222,35 @@ class Assessment(db.Model):
     __tablename__ = "assessments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    application_id: Mapped[int] = mapped_column(db.ForeignKey("applications.id"), nullable=False)
-    assessor_id: Mapped[int] = mapped_column(db.ForeignKey("users.id"), nullable=False)
+    application_id: Mapped[int] = mapped_column(
+        db.ForeignKey("applications.id"), nullable=False, index=True
+    )
+    assessor_id: Mapped[int] = mapped_column(db.ForeignKey("users.id"), nullable=False, index=True)
     scores_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     notes_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     weighted_total: Mapped[int | None] = mapped_column(db.Integer)
     recommendation: Mapped[AssessmentRecommendation | None] = mapped_column(
         SAEnum(AssessmentRecommendation, native_enum=False)
     )
+    # Background-task lifecycle for AI-generated assessments. Defaults to
+    # COMPLETED so rows created synchronously by human assessors (and legacy
+    # AI rows from before async landed) remain in a valid terminal state
+    # without any backfill.
+    status: Mapped[AssessmentStatus] = mapped_column(
+        SAEnum(AssessmentStatus, native_enum=False),
+        nullable=False,
+        default=AssessmentStatus.COMPLETED,
+    )
+    started_at: Mapped[datetime | None] = mapped_column()
     completed_at: Mapped[datetime | None] = mapped_column()
+    # Truncated exception message when :attr:`status` is FAILED. Surfaced in
+    # the assessor UI so a human can decide whether to retry.
+    error_message: Mapped[str | None] = mapped_column(db.String(500))
 
     application: Mapped[Application] = relationship(back_populates="assessments")
     assessor: Mapped[User] = relationship(back_populates="assessments")
+
+    @property
+    def is_pending_ai(self) -> bool:
+        """True while the AI worker has a row queued or in-flight."""
+        return self.status in (AssessmentStatus.PENDING, AssessmentStatus.IN_PROGRESS)

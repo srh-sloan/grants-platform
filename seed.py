@@ -90,7 +90,9 @@ def upsert_form(grant: Grant, form_id: str) -> Form:
     return form
 
 
-# Demo credentials printed to stdout on seed so they are easy to find.
+# WARNING: These credentials are for local development and demo use ONLY.
+# They must never be used in a production deployment. Replace with strong,
+# unique credentials (or disable seed_demo_users() entirely) before going live.
 _DEMO_USERS = [
     {
         "email": "assessor@ehcf.test",
@@ -129,6 +131,12 @@ def seed_demo_users() -> None:
     production -- they exist solely to make the demo runnable without manual
     DB manipulation.
     """
+    import os
+
+    if os.environ.get("FLASK_ENV") == "production":
+        print("WARNING: seed_demo_users() skipped in production environment.")
+        return
+
     print("\nDemo user accounts:")
     print("-" * 50)
 

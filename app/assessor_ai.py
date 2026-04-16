@@ -1,11 +1,32 @@
 """AI-powered automatic assessment layer.
 
-Called immediately after an application is submitted. Uses Claude to:
+Queued from the applicant submission flow (:func:`queue_assessment`) and
+processed on the shared background thread pool in :mod:`app.tasks`. Uses
+Claude to:
+
   1. Read the applicant's answers and the grant's scoring criteria.
   2. Produce a score (0-max) for each criterion.
   3. Persist an Assessment row with scores_json, notes_json, weighted_total,
      and a recommendation.
   4. Send an email notification to the configured address.
+
+Lifecycle of an AI-assessment row:
+
+  queue_assessment()  → row PENDING
+       │
+       ▼
+  _process_assessment() (background thread)
+       │  row IN_PROGRESS, started_at set
+       │
+       ▼
+  Claude call + JSON parse
+       │
+       ├── success → row COMPLETED, scores / notes / recommendation persisted
+       └── failure → row FAILED, error_message stored, completed_at cleared
+
+Retries: calling :func:`queue_assessment` on an existing FAILED row resets it
+to PENDING and re-enqueues the work. COMPLETED and in-flight rows are treated
+as idempotent no-ops.
 
 Environment variables
 ---------------------
@@ -36,6 +57,7 @@ from app.models import (
     Application,
     Assessment,
     AssessmentRecommendation,
+    AssessmentStatus,
     User,
     UserRole,
 )
@@ -216,7 +238,7 @@ def _send_notification(assessment: Assessment) -> None:
         {}
 
         Assessed at {} by AI (claude-sonnet-4-6).
-        View application: /assessor/application/{}
+        View application: /assess/{}
     """)
         .strip()
         .format(
@@ -259,112 +281,239 @@ def _send_notification(assessment: Assessment) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Main entry point
+# API-key resolution
 # ---------------------------------------------------------------------------
 
 
-def assess_application(application_id: int) -> Assessment | None:
-    """Run AI assessment for the given application.
+def _resolve_api_key() -> str | None:
+    """Return the Anthropic API key, honouring a late-loaded .env as a fallback."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        return api_key
+    try:
+        from dotenv import load_dotenv
 
-    Creates and commits an Assessment row. Returns the Assessment on success,
-    or None if the application is missing, has no criteria, or parsing fails.
-    Idempotent: returns the existing Assessment if one already exists.
+        load_dotenv()
+    except ImportError:
+        return None
+    return os.environ.get("ANTHROPIC_API_KEY")
+
+
+# ---------------------------------------------------------------------------
+# Public entry points
+# ---------------------------------------------------------------------------
+
+
+def queue_assessment(application_id: int) -> Assessment | None:
+    """Create (or revive) a PENDING Assessment row and enqueue AI processing.
+
+    Returns the Assessment row immediately so the caller (submit handler,
+    manual trigger route) can redirect the user to a page that shows the
+    pending state. The actual Claude round-trip happens on the background
+    thread pool in :mod:`app.tasks`; the row is updated in-place when it
+    finishes.
+
+    Semantics:
+
+    * Missing application or grant without criteria → returns ``None``, no row
+      created.
+    * Missing ``ANTHROPIC_API_KEY`` → returns ``None``, no row created. This
+      preserves the "silent no-op" shape that existing integration tests
+      (``test_applicant.py``) rely on.
+    * Existing COMPLETED row → idempotent no-op, returns the row unchanged.
+    * Existing PENDING or IN_PROGRESS row → returns the row unchanged (a
+      worker is already on it; we don't double-enqueue).
+    * Existing FAILED row → reset to PENDING and re-enqueued. The retry button
+      on the assessor detail page is the user-facing trigger for this path.
     """
+    from flask import current_app
+
     application = db.session.get(Application, application_id)
     if application is None:
-        log.warning("assess_application: application %s not found", application_id)
+        log.warning("queue_assessment: application %s not found", application_id)
+        return None
+
+    criteria: list[dict] = application.grant.config_json.get("criteria", [])
+    if not criteria:
+        log.warning("queue_assessment: grant %s has no criteria", application.grant.slug)
+        return None
+
+    if not _resolve_api_key():
+        log.info("queue_assessment: ANTHROPIC_API_KEY not set — skipping queue")
         return None
 
     existing = Assessment.query.filter_by(application_id=application_id).first()
     if existing is not None:
-        log.info("assess_application: application %s already assessed", application_id)
-        return existing
-
-    criteria: list[dict] = application.grant.config_json.get("criteria", [])
-    if not criteria:
-        log.warning("assess_application: grant %s has no criteria", application.grant.slug)
-        return None
-
-    ai_user = _get_or_create_ai_user()
-    system_prompt, user_prompt = _build_prompt(application, criteria)
-
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        # Try loading .env from the project root in case Flask didn't pick it up
-        try:
-            from dotenv import load_dotenv
-
-            load_dotenv()
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
-        except ImportError:
-            pass
-    if not api_key:
-        log.error("assess_application: ANTHROPIC_API_KEY not set")
-        return None
-
-    try:
-        import anthropic
-    except ImportError:
-        log.error("assess_application: anthropic SDK not installed")
-        return None
-
-    client = anthropic.Anthropic(api_key=api_key)
-    log.info("assess_application: calling Claude for application %s", application_id)
-    message = client.messages.create(
-        model=_MODEL,
-        max_tokens=4096,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-    if not message.content:
-        log.error("assess_application: empty response from Claude")
-        return None
-    raw = message.content[0].text
-
-    try:
-        parsed = _parse_response(raw)
-    except (json.JSONDecodeError, KeyError, IndexError) as exc:
-        log.error("assess_application: failed to parse Claude response: %s\n%s", exc, raw)
-        return None
-
-    raw_scores = parsed.get("scores") if isinstance(parsed.get("scores"), dict) else {}
-    scores = _coerce_scores(raw_scores, criteria)
-    raw_notes = parsed.get("notes") if isinstance(parsed.get("notes"), dict) else {}
-    valid_ids = {c["id"] for c in criteria}
-    notes: dict[str, str] = {cid: str(raw_notes.get(cid, "")) for cid in valid_ids}
-    gap_analysis: str = parsed.get("gap_analysis", "")
-    raw_recommendation: str = parsed.get("recommendation", "refer")
-
-    auto_rejected = has_auto_reject(scores, criteria)
-    weighted_total = calculate_weighted_score(scores, criteria)
-
-    if auto_rejected:
-        recommendation = AssessmentRecommendation.REJECT
+        if existing.status == AssessmentStatus.FAILED:
+            # Retry: reset the row and requeue. Keep the assessor_id and the
+            # original primary key so any links the assessor has are stable.
+            existing.status = AssessmentStatus.PENDING
+            existing.started_at = None
+            existing.completed_at = None
+            existing.error_message = None
+            existing.scores_json = {}
+            existing.notes_json = {}
+            existing.weighted_total = None
+            existing.recommendation = None
+            db.session.commit()
+            assessment = existing
+        else:
+            log.info(
+                "queue_assessment: application %s already has %s assessment",
+                application_id,
+                existing.status.value,
+            )
+            return existing
     else:
-        try:
-            recommendation = AssessmentRecommendation(raw_recommendation)
-        except ValueError:
-            recommendation = AssessmentRecommendation.REFER
+        ai_user = _get_or_create_ai_user()
+        assessment = Assessment(
+            application_id=application_id,
+            assessor_id=ai_user.id,
+            scores_json={},
+            notes_json={},
+            status=AssessmentStatus.PENDING,
+        )
+        db.session.add(assessment)
+        db.session.commit()
 
-    assessment = Assessment(
-        application_id=application_id,
-        assessor_id=ai_user.id,
-        scores_json=scores,
-        notes_json={**notes, "_gap_analysis": gap_analysis},
-        weighted_total=weighted_total,
-        recommendation=recommendation,
-        completed_at=datetime.now(UTC),
+    # Run on the background pool; in tests this runs inline (see app.tasks).
+    from app.tasks import run_in_background
+
+    run_in_background(
+        current_app._get_current_object(),
+        _process_assessment,
+        application_id,
+        assessment.id,
     )
-    db.session.add(assessment)
+    return assessment
+
+
+def _process_assessment(application_id: int, assessment_id: int) -> None:
+    """Worker entry point: perform the Claude call and update the row.
+
+    Runs inside a background thread with an app context already pushed (see
+    :func:`app.tasks.run_in_background`). Commits its own DB changes and never
+    raises — any failure is stored on the row as :attr:`AssessmentStatus.FAILED`
+    with a truncated ``error_message``.
+    """
+    assessment = db.session.get(Assessment, assessment_id)
+    if assessment is None:
+        log.error("_process_assessment: assessment %s missing", assessment_id)
+        return
+
+    assessment.status = AssessmentStatus.IN_PROGRESS
+    assessment.started_at = datetime.now(UTC)
     db.session.commit()
 
-    log.info(
-        "assess_application: application %s -> weighted_total=%s recommendation=%s",
-        application_id,
-        weighted_total,
-        recommendation.value,
-    )
+    try:
+        application = db.session.get(Application, application_id)
+        if application is None:
+            raise RuntimeError(f"application {application_id} not found")
 
-    _send_notification(assessment)
+        criteria: list[dict] = application.grant.config_json.get("criteria", [])
+        if not criteria:
+            raise RuntimeError("grant has no scoring criteria")
 
+        api_key = _resolve_api_key()
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY not set")
+
+        try:
+            import anthropic
+        except ImportError as exc:
+            raise RuntimeError("anthropic SDK not installed") from exc
+
+        system_prompt, user_prompt = _build_prompt(application, criteria)
+        client = anthropic.Anthropic(api_key=api_key)
+        log.info("_process_assessment: calling Claude for application %s", application_id)
+        message = client.messages.create(
+            model=_MODEL,
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        if not message.content:
+            raise RuntimeError("empty response from Claude")
+        raw = message.content[0].text
+
+        try:
+            parsed = _parse_response(raw)
+        except (json.JSONDecodeError, KeyError, IndexError) as exc:
+            log.error(
+                "_process_assessment: failed to parse Claude response: %s\n%s",
+                exc,
+                raw,
+            )
+            raise RuntimeError("could not parse Claude response as JSON") from exc
+
+        raw_scores = parsed.get("scores") if isinstance(parsed.get("scores"), dict) else {}
+        scores = _coerce_scores(raw_scores, criteria)
+        raw_notes = parsed.get("notes") if isinstance(parsed.get("notes"), dict) else {}
+        valid_ids = {c["id"] for c in criteria}
+        notes: dict[str, str] = {cid: str(raw_notes.get(cid, "")) for cid in valid_ids}
+        gap_analysis: str = parsed.get("gap_analysis", "")
+        raw_recommendation: str = parsed.get("recommendation", "refer")
+
+        auto_rejected = has_auto_reject(scores, criteria)
+        weighted_total = calculate_weighted_score(scores, criteria)
+
+        if auto_rejected:
+            recommendation = AssessmentRecommendation.REJECT
+        else:
+            try:
+                recommendation = AssessmentRecommendation(raw_recommendation)
+            except ValueError:
+                recommendation = AssessmentRecommendation.REFER
+
+        assessment.scores_json = scores
+        assessment.notes_json = {**notes, "_gap_analysis": gap_analysis}
+        assessment.weighted_total = weighted_total
+        assessment.recommendation = recommendation
+        assessment.completed_at = datetime.now(UTC)
+        assessment.status = AssessmentStatus.COMPLETED
+        assessment.error_message = None
+        db.session.commit()
+
+        log.info(
+            "_process_assessment: application %s -> weighted_total=%s recommendation=%s",
+            application_id,
+            weighted_total,
+            recommendation.value,
+        )
+
+        _send_notification(assessment)
+
+    except Exception as exc:  # noqa: BLE001
+        # Roll back any in-flight changes (notably the IN_PROGRESS commit is
+        # already durable, but anything scheduled after it gets reverted) so
+        # the FAILED update below lands cleanly.
+        db.session.rollback()
+        failed = db.session.get(Assessment, assessment_id)
+        if failed is not None:
+            failed.status = AssessmentStatus.FAILED
+            failed.error_message = str(exc)[:500]
+            failed.completed_at = datetime.now(UTC)
+            db.session.commit()
+        log.exception("_process_assessment: application %s failed", application_id)
+
+
+def assess_application(application_id: int) -> Assessment | None:
+    """Synchronous wrapper around :func:`queue_assessment`.
+
+    Kept for callers that want the old "run now, return the result" contract
+    — the manual ``/run-ai`` trigger and existing tests. In production this
+    still delegates to the background pool, so the caller returns as soon as
+    the PENDING row is written. In tests (``TESTING=True``) the task runs
+    inline and this function returns the fully-populated row (or ``None`` if
+    parsing/API failed) to match the pre-async contract.
+    """
+    assessment = queue_assessment(application_id)
+    if assessment is None:
+        return None
+    # In sync mode the worker has already finished; reload to pick up the
+    # COMPLETED/FAILED state it wrote. In async mode this just returns the
+    # PENDING row, which is fine for the UI code paths.
+    db.session.refresh(assessment)
+    if assessment.status == AssessmentStatus.FAILED:
+        return None
     return assessment

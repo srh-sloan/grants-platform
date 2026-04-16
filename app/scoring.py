@@ -29,8 +29,16 @@ def calculate_weighted_score(scores: dict[str, int], criteria: Iterable[dict]) -
 
 
 def has_auto_reject(scores: dict[str, int], criteria: Iterable[dict]) -> bool:
-    """True if any criterion flagged ``auto_reject_on_zero`` scored 0."""
-    return any(int(scores.get(c["id"]) or 0) == 0 for c in criteria if c.get("auto_reject_on_zero"))
+    """True if any scored criterion flagged ``auto_reject_on_zero`` scored 0.
+
+    Unscored criteria (missing from ``scores``) are ignored so that partial
+    assessments do not trigger false auto-reject flags.
+    """
+    return any(
+        int(scores[c["id"]]) == 0
+        for c in criteria
+        if c.get("auto_reject_on_zero") and c["id"] in scores
+    )
 
 
 def missing_criteria(scores: dict[str, int], criteria: Iterable[dict]) -> list[str]:

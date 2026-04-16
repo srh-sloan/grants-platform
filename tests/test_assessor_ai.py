@@ -187,7 +187,8 @@ def test_assess_application_returns_none_for_missing_app(app):
 
 
 def test_assess_application_handles_bad_json(app, submitted_application):
-    """Returns None and logs when Claude returns unparseable output."""
+    """Parse failures persist a FAILED row (so the assessor can retry) and
+    :func:`assess_application` returns ``None`` for backwards compatibility."""
     message = MagicMock()
     message.content = [MagicMock(text="Sorry, I cannot score this application.")]
 
@@ -205,9 +206,17 @@ def test_assess_application_handles_bad_json(app, submitted_application):
             result = assess_application(submitted_application.id)
 
         assert result is None
-        # Confirm no Assessment row was committed
+        # Under the async contract a PENDING row is created up-front and
+        # transitions to FAILED when the worker can't parse Claude's reply.
+        # The row sticks around so the assessor can click Retry.
+        from app.models import AssessmentStatus
+
         assessment = Assessment.query.filter_by(application_id=submitted_application.id).first()
-        assert assessment is None
+        assert assessment is not None
+        assert assessment.status == AssessmentStatus.FAILED
+        assert assessment.scores_json == {}
+        assert assessment.error_message  # non-empty
+        assert assessment.completed_at is not None
 
 
 def test_assess_application_auto_reject_on_zero(app, submitted_application):

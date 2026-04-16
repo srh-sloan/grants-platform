@@ -21,9 +21,9 @@
       {% if application.status.value == "submitted" %}
         {{ govukPanel({
           "titleText": "Application submitted",
-          "html": "Your reference number is <strong>#" ~ application.id ~ "</strong>.<br>"
-                  ~ "Submitted to <strong>" ~ application.grant.name ~ "</strong>.<br>"
-                  ~ "We'll be in touch at <strong>" ~ (application.organisation.contact_email if application.organisation and application.organisation.contact_email else "your registered email") ~ "</strong> once the assessment panel has reviewed it."
+          "html": "Your reference number is <strong>#" ~ (application.id | e) ~ "</strong>.<br>"
+                  ~ "Submitted to <strong>" ~ (application.grant.name | e) ~ "</strong>.<br>"
+                  ~ "We'll be in touch at <strong>" ~ ((application.organisation.contact_email if application.organisation and application.organisation.contact_email else "your registered email") | e) ~ "</strong> once the assessment panel has reviewed it."
         }) }}
       {% endif %}
 

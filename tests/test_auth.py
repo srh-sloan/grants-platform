@@ -85,8 +85,8 @@ def test_register_creates_applicant_and_logs_in(client, db):
         data={
             "organisation_name": "Shelter Bristol",
             "email": "lead@shelterbristol.test",
-            "password": "a-valid-password",
-            "confirm_password": "a-valid-password",
+            "password": "V4lid!Password1",
+            "confirm_password": "V4lid!Password1",
         },
         follow_redirects=False,
     )
@@ -99,9 +99,9 @@ def test_register_creates_applicant_and_logs_in(client, db):
     assert user.role == UserRole.APPLICANT
     assert user.organisation is not None
     assert user.organisation.name == "Shelter Bristol"
-    assert check_password_hash(user.password_hash, "a-valid-password")
+    assert check_password_hash(user.password_hash, "V4lid!Password1")
     # Password is hashed, not stored as plaintext.
-    assert "a-valid-password" not in user.password_hash
+    assert "V4lid!Password1" not in user.password_hash
 
     # Subsequent request confirms the session cookie was set.
     dash = client.get("/apply/")
@@ -115,8 +115,8 @@ def test_register_normalises_email_to_lowercase(client, db):
         data={
             "organisation_name": "Shout Out",
             "email": "MiXeD@Example.Test",
-            "password": "a-valid-password",
-            "confirm_password": "a-valid-password",
+            "password": "V4lid!Password1",
+            "confirm_password": "V4lid!Password1",
         },
     )
     user = db.session.execute(select(User).where(User.email == "mixed@example.test")).scalar_one()
@@ -129,7 +129,7 @@ def test_register_rejects_mismatched_passwords(client, db):
         data={
             "organisation_name": "Shelter",
             "email": "a@b.test",
-            "password": "a-valid-password",
+            "password": "V4lid!Password1",
             "confirm_password": "different-password",
         },
     )
@@ -159,8 +159,8 @@ def test_register_rejects_bad_email(client):
         data={
             "organisation_name": "X",
             "email": "not-an-email",
-            "password": "a-valid-password",
-            "confirm_password": "a-valid-password",
+            "password": "V4lid!Password1",
+            "confirm_password": "V4lid!Password1",
         },
     )
     assert response.status_code == 200
@@ -174,8 +174,8 @@ def test_register_rejects_duplicate_email(client, db, make_user):
         data={
             "organisation_name": "Another Org",
             "email": "dup@x.test",
-            "password": "a-valid-password",
-            "confirm_password": "a-valid-password",
+            "password": "V4lid!Password1",
+            "confirm_password": "V4lid!Password1",
         },
     )
     assert response.status_code == 200
@@ -190,8 +190,8 @@ def test_register_strips_whitespace_from_organisation_name(client, db):
         data={
             "organisation_name": "  Shelter Bristol  ",
             "email": "trim@example.test",
-            "password": "a-valid-password",
-            "confirm_password": "a-valid-password",
+            "password": "V4lid!Password1",
+            "confirm_password": "V4lid!Password1",
         },
         follow_redirects=False,
     )
@@ -542,8 +542,8 @@ def test_post_without_csrf_token_is_rejected_when_enabled():
                 data={
                     "organisation_name": "X",
                     "email": "x@x.test",
-                    "password": "a-valid-password",
-                    "confirm_password": "a-valid-password",
+                    "password": "V4lid!Password1",
+                    "confirm_password": "V4lid!Password1",
                 },
             )
             assert response.status_code == 400

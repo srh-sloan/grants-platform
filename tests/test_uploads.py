@@ -24,7 +24,7 @@ from app.uploads import UploadRejected, list_documents, save_upload
 
 
 def _make_file(
-    content: bytes = b"test content",
+    content: bytes = b"%PDF-1.4 test content",
     filename: str = "test.pdf",
     content_type: str = "application/pdf",
 ) -> FileStorage:
@@ -50,6 +50,7 @@ class TestSaveUpload:
     def test_creates_document_row(self, app, submitted_application):
         with app.app_context():
             doc = save_upload(submitted_application, "budget", _make_file())
+            db.session.commit()
             assert doc.id is not None
             assert doc.application_id == submitted_application.id
             assert doc.kind == "budget"
@@ -61,13 +62,14 @@ class TestSaveUpload:
             doc = save_upload(
                 submitted_application,
                 "budget",
-                _make_file(content=b"hello world"),
+                _make_file(content=b"%PDF-1.4 hello world"),
             )
+            db.session.commit()
             upload_folder = app.config["UPLOAD_FOLDER"]
             full_path = os.path.join(upload_folder, doc.storage_path)
             assert os.path.isfile(full_path)
             with open(full_path, "rb") as f:
-                assert f.read() == b"hello world"
+                assert f.read() == b"%PDF-1.4 hello world"
 
     def test_rejects_empty_filename(self, app, submitted_application):
         with app.app_context(), pytest.raises(UploadRejected):
@@ -86,10 +88,11 @@ class TestSaveUpload:
             doc = save_upload(
                 submitted_application,
                 "la_letter",
-                _make_file(filename="../../../etc/passwd"),
+                _make_file(filename="../../../etc/report.pdf"),
             )
+            db.session.commit()
             assert ".." not in doc.storage_path
-            assert "etc" in doc.storage_path or "passwd" in doc.storage_path
+            assert "etc" in doc.storage_path or "report" in doc.storage_path
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +105,7 @@ class TestListDocuments:
         with app.app_context():
             save_upload(submitted_application, "budget", _make_file(filename="a.pdf"))
             save_upload(submitted_application, "plan", _make_file(filename="b.pdf"))
+            db.session.commit()
             docs = list_documents(submitted_application.id)
             assert len(docs) == 2
             assert docs[0].filename == "a.pdf"
@@ -122,23 +126,26 @@ class TestServeDocument:
         """Unauthenticated users are redirected to login."""
         with app.app_context():
             doc = save_upload(submitted_application, "budget", _make_file())
+            db.session.commit()
             doc_id = doc.id
         resp = client.get(f"/uploads/{doc_id}")
         assert resp.status_code in (301, 302)
         assert "/auth/login" in resp.headers.get("Location", "")
 
     def test_applicant_can_access_own(self, app, client, applicant_user, submitted_application):
+        pdf_content = b"%PDF-1.4 secret data"
         with app.app_context():
             doc = save_upload(
                 submitted_application,
                 "budget",
-                _make_file(content=b"secret data"),
+                _make_file(content=pdf_content),
             )
+            db.session.commit()
             doc_id = doc.id
         _login(client, applicant_user)
         resp = client.get(f"/uploads/{doc_id}")
         assert resp.status_code == 200
-        assert resp.data == b"secret data"
+        assert resp.data == pdf_content
 
     def test_applicant_cannot_access_others(
         self, app, client, applicant_user, submitted_application
@@ -146,6 +153,7 @@ class TestServeDocument:
         """An applicant from a different org gets 403."""
         with app.app_context():
             doc = save_upload(submitted_application, "budget", _make_file())
+            db.session.commit()
             doc_id = doc.id
 
             # Create a second org + user
@@ -173,6 +181,7 @@ class TestServeDocument:
     def test_assessor_can_access_submitted(self, app, client, assessor_user, submitted_application):
         with app.app_context():
             doc = save_upload(submitted_application, "budget", _make_file())
+            db.session.commit()
             doc_id = doc.id
         _login(client, assessor_user)
         resp = client.get(f"/uploads/{doc_id}")
@@ -191,8 +200,9 @@ class TestServeDocument:
                 answers_json={},
             )
             db.session.add(draft_app)
-            db.session.commit()
+            db.session.flush()
             doc = save_upload(draft_app, "budget", _make_file())
+            db.session.commit()
             doc_id = doc.id
 
         _login(client, assessor_user)

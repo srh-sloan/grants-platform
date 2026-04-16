@@ -45,7 +45,8 @@ from werkzeug.security import generate_password_hash
 from wtforms import PasswordField, SelectField, StringField, SubmitField
 from wtforms.validators import EqualTo, InputRequired, Length, Regexp, ValidationError
 
-from app.auth import assessor_required
+from app.audit import audit_log
+from app.auth import admin_required, assessor_required
 from app.extensions import db
 from app.models import (
     Application,
@@ -72,6 +73,11 @@ bp = Blueprint("assessor", __name__, url_prefix="/assess")
 _EMAIL_REGEX = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 _EMAIL_MESSAGE = "Enter an email address in the correct format, like name@example.com"
 _PASSWORD_MIN_LENGTH = 10
+_PASSWORD_COMPLEXITY_REGEX = r"(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])"
+_PASSWORD_COMPLEXITY_MESSAGE = (
+    "Password must contain at least one uppercase letter, one lowercase letter, "
+    "one number, and one symbol"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +121,7 @@ class CreateAssessorForm(FlaskForm):
                 max=128,
                 message=f"Password must be at least {_PASSWORD_MIN_LENGTH} characters",
             ),
+            Regexp(_PASSWORD_COMPLEXITY_REGEX, message=_PASSWORD_COMPLEXITY_MESSAGE),
         ],
     )
     confirm_password = PasswordField(
@@ -193,6 +200,8 @@ class EditUserForm(FlaskForm):
             raise ValidationError("An account with this email already exists")
 
     def validate_new_password(self, field: PasswordField) -> None:
+        import re
+
         value = field.data or ""
         if not value:
             return
@@ -200,6 +209,8 @@ class EditUserForm(FlaskForm):
             raise ValidationError(f"Password must be at least {_PASSWORD_MIN_LENGTH} characters")
         if len(value) > 128:
             raise ValidationError("Password must be 128 characters or fewer")
+        if not re.search(_PASSWORD_COMPLEXITY_REGEX, value):
+            raise ValidationError(_PASSWORD_COMPLEXITY_MESSAGE)
 
 
 # ---------------------------------------------------------------------------
@@ -250,12 +261,9 @@ def _redirect_to_detail(app_id: int):
 def _get_or_create_assessment(application: Application) -> Assessment:
     assessment = Assessment.query.filter_by(application_id=application.id).first()
     if assessment is None:
-        from app.assessor_ai import _get_or_create_ai_user
-
-        ai_user = _get_or_create_ai_user()
         assessment = Assessment(
             application_id=application.id,
-            assessor_id=ai_user.id,
+            assessor_id=current_user.id,
             scores_json={},
             notes_json={},
         )
@@ -502,6 +510,13 @@ def save_score(app_id: int):
         assessment.recommendation = AssessmentRecommendation.REJECT
 
     db.session.commit()
+    audit_log(
+        "SCORES_SAVED",
+        user_id=current_user.id,
+        application_id=app_id,
+        weighted_total=weighted_total,
+        auto_rejected=auto_rejected,
+    )
     flash("Scores saved.", "success")
     return _redirect_to_detail(app_id)
 
@@ -600,6 +615,8 @@ def flag_for_moderation(app_id: int):
         application.status = ApplicationStatus.UNDER_REVIEW
     else:
         flash("Moderation flag removed.", "success")
+        if application.status == ApplicationStatus.UNDER_REVIEW:
+            application.status = ApplicationStatus.SUBMITTED
 
     db.session.commit()
     return _redirect_to_detail(app_id)
@@ -654,6 +671,13 @@ def record_decision(app_id: int):
     assessment.completed_at = datetime.now(UTC)
 
     db.session.commit()
+    audit_log(
+        "DECISION_RECORDED",
+        user_id=current_user.id,
+        application_id=app_id,
+        recommendation=recommendation.value,
+        new_status=application.status.value,
+    )
     _notify_applicant(application, recommendation, decision_notes)
 
     flash("Decision recorded and applicant notified.", "success")
@@ -705,6 +729,9 @@ def _call_claude_for_monitoring(prompt: str) -> dict | None:
         max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
+    if not message.content:
+        log.error("Claude returned an empty response for monitoring plan")
+        return None
     raw = message.content[0].text
     return _parse_json_response(raw)
 
@@ -857,26 +884,51 @@ def generate_monitoring(app_id: int):
 @bp.post("/<int:app_id>/run-ai")
 @assessor_required
 def trigger_ai(app_id: int):
-    _get_application_or_404(app_id)  # 404 side-effect; row not needed here
+    """Manual trigger / retry for AI assessment.
+
+    Two entry shapes:
+
+    * No existing row → queue a fresh PENDING assessment. The background
+      worker fills in scores; the detail page auto-refreshes while PENDING.
+    * Existing FAILED row → :func:`queue_assessment` resets it and requeues
+      so the assessor can retry without deleting the row.
+
+    Existing COMPLETED / PENDING / IN_PROGRESS rows short-circuit with an
+    informational flash — we don't want a second Claude call to clobber a
+    completed result.
+    """
+    # Validate the app exists (404 if not) but we don't need the instance —
+    # queue_assessment does its own lookup by ID.
+    _get_application_or_404(app_id)
     form = _CsrfForm()
     if not form.validate_on_submit():
         abort(400)
 
+    from app.assessor_ai import queue_assessment
+    from app.models import AssessmentStatus
+
     existing = Assessment.query.filter_by(application_id=app_id).first()
-    if existing is not None:
+    if existing is not None and existing.status == AssessmentStatus.COMPLETED:
         flash("AI assessment already exists for this application.", "warning")
         return _redirect_to_detail(app_id)
+    if existing is not None and existing.status in (
+        AssessmentStatus.PENDING,
+        AssessmentStatus.IN_PROGRESS,
+    ):
+        flash("AI assessment is already in progress.", "info")
+        return _redirect_to_detail(app_id)
 
-    from app.assessor_ai import assess_application
-
-    assessment = assess_application(app_id)
+    assessment = queue_assessment(app_id)
     if assessment is None:
         flash(
-            "AI assessment failed -- check ANTHROPIC_API_KEY is set and the application has answers.",
+            "AI assessment could not be queued -- check ANTHROPIC_API_KEY is set "
+            "and the grant defines scoring criteria.",
             "error",
         )
+    elif existing is not None:  # retry path
+        flash("AI assessment queued for retry.", "success")
     else:
-        flash("AI assessment complete.", "success")
+        flash("AI assessment queued. It will appear here shortly.", "success")
     return _redirect_to_detail(app_id)
 
 
@@ -914,7 +966,7 @@ def allocation():
 
 
 @bp.get("/users")
-@assessor_required
+@admin_required
 def list_users():
     _admin_required()
     users = (
@@ -931,7 +983,7 @@ def list_users():
 
 
 @bp.route("/users/new", methods=["GET", "POST"])
-@assessor_required
+@admin_required
 def create_user():
     _admin_required()
     form = CreateAssessorForm()
@@ -944,13 +996,19 @@ def create_user():
         )
         db.session.add(user)
         db.session.commit()
+        audit_log(
+            "USER_CREATED",
+            user_id=current_user.id,
+            target_email=email,
+            target_role=UserRole(form.role.data).value,
+        )
         flash(f"Account created for {email}.", "success")
         return redirect(url_for("assessor.list_users"))
     return render_template("assessor/create_user.html", form=form)
 
 
 @bp.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
-@assessor_required
+@admin_required
 def edit_user(user_id: int):
     _admin_required()
     user = db.session.get(User, user_id)
@@ -985,6 +1043,14 @@ def edit_user(user_id: int):
         if form.new_password.data:
             user.password_hash = generate_password_hash(form.new_password.data)
         db.session.commit()
+        audit_log(
+            "USER_UPDATED",
+            user_id=current_user.id,
+            target_id=user.id,
+            target_email=new_email,
+            target_role=new_role.value,
+            password_changed=bool(form.new_password.data),
+        )
         flash(f"Account updated for {new_email}.", "success")
         return redirect(url_for("assessor.list_users"))
 

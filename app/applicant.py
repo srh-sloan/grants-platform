@@ -262,7 +262,6 @@ def dashboard():
         "applicant/dashboard.html",
         applications=applications,
         available_grants=available_grants,
-        start_form=_ActionForm(),
     )
 
 
@@ -298,7 +297,10 @@ def eligibility(grant_slug: str):
         # Grant has no eligibility form — skip straight to start.
         return redirect(url_for("applicant.start", grant_slug=grant.slug))
 
-    page = list_pages(elig_form.schema_json)[0]
+    pages = list_pages(elig_form.schema_json)
+    if not pages:
+        return redirect(url_for("applicant.start", grant_slug=grant.slug))
+    page = pages[0]
     # The page.html template expects an ``application`` with ``grant`` — use a
     # lightweight stand-in since no application exists yet.
     fake_app = SimpleNamespace(id=None, grant=grant)
@@ -337,7 +339,10 @@ def eligibility_post(grant_slug: str):
     if elig_form is None:
         return redirect(url_for("applicant.start", grant_slug=grant.slug))
 
-    page = list_pages(elig_form.schema_json)[0]
+    pages = list_pages(elig_form.schema_json)
+    if not pages:
+        return redirect(url_for("applicant.start", grant_slug=grant.slug))
+    page = pages[0]
     submitted = _extract_field_values(page, request.form)
     errors = validate_page(page, submitted)
 
@@ -630,16 +635,20 @@ def submit(app_id: int):
     application.submitted_at = datetime.now(UTC)
     db.session.commit()
 
-    # Trigger AI assessment fire-and-forget -- failures are logged, never shown to applicant.
+    # Enqueue AI assessment on the background pool so the applicant's
+    # submission response isn't held up by the Claude round-trip. Failures to
+    # *queue* (missing key, grant has no criteria) are logged but never shown
+    # to the applicant — the assessor sees a row with FAILED status if the
+    # Claude call itself errors out later. See :mod:`app.assessor_ai`.
     try:
-        from app.assessor_ai import assess_application
+        from app.assessor_ai import queue_assessment
 
-        assess_application(application.id)
+        queue_assessment(application.id)
     except Exception as exc:  # noqa: BLE001
         import logging
 
         logging.getLogger(__name__).warning(
-            "AI assessment failed for app %s: %s", application.id, exc
+            "AI assessment could not be queued for app %s: %s", application.id, exc
         )
 
     flash(

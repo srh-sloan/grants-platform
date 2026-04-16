@@ -116,6 +116,12 @@ def http_get_json(
     validation failure) from "we couldn't reach the register" (exception,
     always a skip).
     """
+    # SSRF guard: only HTTPS URLs are permitted. HTTP could expose credentials
+    # (Basic Auth headers) to a network observer; non-HTTPS schemes (file://,
+    # ftp://, etc.) should never reach external validators.
+    if not url.startswith("https://"):
+        raise ExternalValidatorError(f"Only HTTPS URLs are permitted, got: {url!r}")
+
     merged_headers = {
         "Accept": "application/json",
         "User-Agent": DEFAULT_USER_AGENT,

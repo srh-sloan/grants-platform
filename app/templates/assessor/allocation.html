@@ -42,7 +42,6 @@
         <tbody class="govuk-table__body">
           {% for application, assessment in rows %}
             {% set ns.rank = ns.rank + 1 %}
-            {% set auto_rejected = assessment.notes_json and assessment.notes_json.get("_flagged") %}
 
             {# Estimate award as midpoint of grant range #}
             {% if application.grant %}

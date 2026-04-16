@@ -30,9 +30,23 @@ import logging
 import os
 from typing import Any
 
-import anthropic
-
 log = logging.getLogger(__name__)
+
+
+def _get_anthropic_client(api_key: str):
+    """Lazy-import anthropic and return a client instance.
+
+    Keeps the SDK out of module-level imports so the app boots even when
+    ``anthropic`` is not installed (the admin import route simply raises
+    a clear error at call time).
+    """
+    try:
+        import anthropic
+    except ImportError as exc:
+        raise RuntimeError(
+            "anthropic package is required for this feature. Install with: pip install anthropic"
+        ) from exc
+    return anthropic.Anthropic(api_key=api_key)
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +313,11 @@ def generate_grant_artifacts(
             "Set it in your environment to use the grant import feature."
         )
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = _get_anthropic_client(api_key)
+    # Import locally alongside the lazy client so missing-SDK environments
+    # still fail cleanly inside ``_get_anthropic_client`` with a friendly
+    # RuntimeError instead of NameError on the except lines below.
+    import anthropic
 
     # Build the text that goes into the prompt. The whole block is sandwiched
     # in <prospectus_data>...</prospectus_data> inside the template so any
