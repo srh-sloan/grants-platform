@@ -1,6 +1,9 @@
 {#
   Applicant form page — owned by Stream B (P1.3 / P2.1).
 
+  Renders actual GOV.UK Frontend field macros for all supported types:
+  text, textarea, radio, checkbox, select, number, currency, date, file.
+
   Context:
     form          — Form model
     application   — Application model (application.id, application.grant.name)
@@ -12,6 +15,8 @@
     all_pages     — full list of page dicts (used for progress indicator)
     current_index — 0-based index of current page within all_pages
     csrf_form     — _ActionForm() instance (provides CSRF token)
+    page_number   — (optional) 1-based index, legacy compat
+    total_pages   — (optional) total number of pages, legacy compat
 #}
 {% extends "base.html" %}
 
@@ -24,13 +29,14 @@
 {% from 'govuk_frontend_jinja/components/file-upload/macro.html'   import govukFileUpload %}
 {% from 'govuk_frontend_jinja/components/error-summary/macro.html' import govukErrorSummary %}
 {% from 'govuk_frontend_jinja/components/button/macro.html'        import govukButton %}
+{% from 'govuk_frontend_jinja/components/back-link/macro.html'     import govukBackLink %}
 
 {% block title %}{{ page.title }}{% endblock %}
 
 {% block beforeContent %}
   {{ super() }}
   {% if back_url %}
-    <a href="{{ back_url }}" class="govuk-back-link">Back</a>
+    {{ govukBackLink({"href": back_url, "text": "Back"}) }}
   {% endif %}
 {% endblock %}
 
@@ -39,9 +45,14 @@
     <div class="govuk-grid-column-two-thirds">
 
       <span class="govuk-caption-l">{{ application.grant.name }}</span>
-      {% if page_number and total_pages %}
+
+      {# --- Page progress indicator --- #}
+      {% if all_pages is defined and all_pages and current_index is defined and current_index is not none %}
+        <p class="govuk-body-s govuk-!-colour-secondary">Page {{ current_index + 1 }} of {{ all_pages|length }}</p>
+      {% elif page_number and total_pages %}
         <p class="govuk-body-s govuk-!-colour-secondary">Page {{ page_number }} of {{ total_pages }}</p>
       {% endif %}
+
       <h1 class="govuk-heading-xl">{{ page.title }}</h1>
 
       {# Build the error summary list so each item links to its field. #}
@@ -83,17 +94,26 @@
             {{ govukInput({
               "id": field.id,
               "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
               "value": field_value,
               "errorMessage": error_obj
             }) }}
 
           {# ---- textarea ---- #}
           {% elif field.type == "textarea" %}
+            {% set hint_parts = [] %}
+            {% if field.hint is defined and field.hint %}
+              {% set _ = hint_parts.append(field.hint) %}
+            {% endif %}
+            {% if field.word_limit is defined and field.word_limit %}
+              {% set _ = hint_parts.append("You can write up to " ~ field.word_limit ~ " words") %}
+            {% endif %}
             {{ govukTextarea({
               "id": field.id,
               "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": hint_parts | join(". ")} if hint_parts else {},
               "value": field_value,
               "errorMessage": error_obj
             }) }}
@@ -101,7 +121,7 @@
           {# ---- radio ---- #}
           {% elif field.type == "radio" %}
             {% set radio_items = [] %}
-            {% for opt in field.options %}
+            {% for opt in field.options | default([]) %}
               {% set _ = radio_items.append({
                 "value": opt.value,
                 "text": opt.label,
@@ -111,25 +131,48 @@
             {{ govukRadios({
               "idPrefix": field.id,
               "name": field.id,
-              "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--s"}},
+              "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--m"}},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
               "items": radio_items,
               "errorMessage": error_obj
             }) }}
 
-          {# ---- checkbox (single boolean declaration) ---- #}
+          {# ---- checkbox ---- #}
           {% elif field.type == "checkbox" %}
-            {{ govukCheckboxes({
-              "idPrefix": field.id,
-              "name": field.id,
-              "items": [{"value": "on", "text": field.label,
-                         "checked": (field_value == "on" or field_value == true or field_value == "true")}],
-              "errorMessage": error_obj
-            }) }}
+            {% if field.options is defined and field.options %}
+              {# Multi-option checkboxes #}
+              {% set cb_items = [] %}
+              {% set checked_vals = field_value if field_value is iterable and field_value is not string else [] %}
+              {% for opt in field.options %}
+                {% set _ = cb_items.append({
+                  "value": opt.value,
+                  "text": opt.label,
+                  "checked": (opt.value in checked_vals)
+                }) %}
+              {% endfor %}
+              {{ govukCheckboxes({
+                "idPrefix": field.id,
+                "name": field.id,
+                "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--m"}},
+                "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+                "items": cb_items,
+                "errorMessage": error_obj
+              }) }}
+            {% else %}
+              {# Single declaration checkbox #}
+              {{ govukCheckboxes({
+                "idPrefix": field.id,
+                "name": field.id,
+                "items": [{"value": "on", "text": field.label,
+                           "checked": (field_value == "on" or field_value == true or field_value == "true")}],
+                "errorMessage": error_obj
+              }) }}
+            {% endif %}
 
           {# ---- select ---- #}
           {% elif field.type == "select" %}
-            {% set select_items = [{"value": "", "text": ""}] %}
-            {% for opt in field.options %}
+            {% set select_items = [{"value": "", "text": "Select an option", "selected": not field_value}] %}
+            {% for opt in field.options | default([]) %}
               {% set _ = select_items.append({
                 "value": opt.value,
                 "text": opt.label,
@@ -139,7 +182,8 @@
             {{ govukSelect({
               "id": field.id,
               "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
               "items": select_items,
               "errorMessage": error_obj
             }) }}
@@ -149,7 +193,8 @@
             {{ govukInput({
               "id": field.id,
               "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
               "inputmode": "numeric",
               "value": field_value,
               "errorMessage": error_obj
@@ -160,7 +205,8 @@
             {{ govukInput({
               "id": field.id,
               "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
               "inputmode": "numeric",
               "prefix": {"text": "£"},
               "value": field_value,
@@ -172,7 +218,8 @@
             {{ govukDateInput({
               "id": field.id,
               "namePrefix": field.id,
-              "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--s"}},
+              "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--m"}},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
               "errorMessage": error_obj
             }) }}
 
@@ -181,7 +228,8 @@
             {{ govukFileUpload({
               "id": field.id,
               "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
               "errorMessage": error_obj
             }) }}
 
