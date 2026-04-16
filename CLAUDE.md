@@ -37,7 +37,7 @@ for shipping working slices over completeness.
 | Migrations | Alembic / Flask-Migrate | Defer until the schema settles |
 | Auth | Flask-Login + `werkzeug.security` (or bcrypt) | Session-based |
 | Forms | **JSON schemas + Flask-WTF for CSRF/validation** | Form *definitions* are JSON files; the app is a generic runner over them |
-| Styling | Plain HTML first, GOV.UK Frontend if time allows | |
+| Styling | GOV.UK Frontend | `govuk-frontend-jinja` macros + `govuk-frontend-wtf` widgets |
 | File uploads | Local filesystem for v0 | S3 only if we need it |
 | Deployment | Local → Render / Railway later | |
 
@@ -64,6 +64,8 @@ flag it.
 config.py
 run.py
 ```
+
+---
 
 ## Data Model (flexible core)
 
@@ -107,6 +109,8 @@ blobs keyed by a form schema.
 
 Columns may evolve — treat this as a starting point, not a spec.
 
+---
+
 ## Scoring (data-driven)
 
 Criteria, weights, and auto-reject rules come from the grant's `config_json`,
@@ -135,6 +139,8 @@ A grant config snippet looks like:
   ]
 }
 ```
+
+---
 
 ## Key User Flows
 
@@ -192,6 +198,77 @@ Any criterion scoring 0 → auto-reject.
 
 ---
 
+## GOV.UK Frontend Setup
+
+### Flask app factory (`app/__init__.py`)
+```python
+from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
+from govuk_frontend_wtf.main import WTFormsHelpers
+
+def create_app():
+    app = Flask(__name__)
+
+    app.jinja_loader = ChoiceLoader([
+        PackageLoader("app"),
+        PrefixLoader({
+            "govuk_frontend_jinja": PackageLoader("govuk_frontend_jinja"),
+            "govuk_frontend_wtf": PackageLoader("govuk_frontend_wtf"),
+        }),
+    ])
+
+    WTFormsHelpers(app)
+    # ... register blueprints, db, login_manager etc.
+```
+
+### Base template (`templates/base.html`)
+```html
+<!DOCTYPE html>
+<html lang="en" class="govuk-template">
+<head>
+  <link rel="stylesheet" href="{{ url_for('static', filename='govuk-frontend.min.css') }}">
+</head>
+<body class="govuk-template__body">
+  {% from 'govuk_frontend_jinja/components/skip-link/macro.html' import govukSkipLink %}
+  {{ govukSkipLink({'text': 'Skip to main content', 'href': '#main-content'}) }}
+  {% include 'partials/header.html' %}
+  <div class="govuk-width-container">
+    <main class="govuk-main-wrapper" id="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="{{ url_for('static', filename='govuk-frontend.min.js') }}"></script>
+</body>
+</html>
+```
+
+### Static assets
+Download `govuk-frontend.min.css` and `govuk-frontend.min.js` from the
+[GOV.UK Frontend releases](https://github.com/alphagov/govuk-frontend/releases)
+and place in `app/static/`.
+
+---
+
+## WTForms Usage Boundaries
+
+WTForms is used **only** for forms with static, known-at-build-time fields:
+- Login / registration
+- Assessor scoring (always the same shape: score + notes per criterion)
+
+**Do not use WTForms for application form sections.** Those fields are defined
+in the JSON schema and rendered by `forms_runner.py` via GOV.UK Jinja macros
+directly. This keeps the door open for a no-code form builder later without
+requiring structural changes.
+
+---
+
+## Seed Data (for hackathon)
+
+Populate `grants` and `forms` via a `seed.py` script using EHCF as the first
+grant. This proves out the data-driven approach without needing an admin UI on
+day one. See `refs/ehcf-prospectus.md` for the source data.
+
+---
+
 ## Environment
 
 ```
@@ -199,12 +276,3 @@ FLASK_SECRET_KEY=
 DATABASE_URL=sqlite:///grants.db      # or the Flask config equivalent
 UPLOAD_FOLDER=uploads/
 ```
-
-## Optional: GOV.UK Frontend
-
-If we use the GOV.UK Design System, the usual route is `govuk-frontend-jinja`
-(components as Jinja macros) + `govuk-frontend-wtf` (WTForms widgets), plus the
-CSS/JS bundle from the
-[GOV.UK Frontend releases](https://github.com/alphagov/govuk-frontend/releases)
-dropped into `app/static/`. Worth doing once the core flow works end-to-end;
-not a v0 blocker.
