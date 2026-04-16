@@ -3,4 +3,42 @@ name = "grants-platform"
 version = "0.1.0"
 description = "Prototype grants application and assessment system. First grant: Ending Homelessness in Communities Fund (EHCF)."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "flask>=3.0",
+    "flask-sqlalchemy>=3.1",
+    "flask-login>=0.6",
+    "flask-wtf>=1.2",
+    "sqlalchemy>=2.0",
+    "govuk-frontend-jinja>=3.1",
+    "govuk-frontend-wtf>=3.1",
+    "python-dotenv>=1.0",
+    "gunicorn>=23.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+# E501  — line length enforced by formatter, not the linter
+# UP042 — we use `(str, Enum)` deliberately to keep SAEnum serialization stable
+ignore = ["E501", "UP042"]

@@ -1,0 +1,69 @@
+{
+  "slug": "ehcf",
+  "name": "Ending Homelessness in Communities Fund",
+  "status": "open",
+  "summary": "Up to £37m over 3 years for VCFS organisations across England delivering homelessness prevention and recovery support.",
+  "contact_email": "ehcf@communities.gov.uk",
+  "prospectus_url": "https://www.gov.uk/guidance/ending-homelessness-in-communities-fund-prospectus",
+  "eligibility": [
+    {
+      "id": "org_type",
+      "type": "in",
+      "label": "Organisation type must be charity, CIO, CIC, CBS or PCC",
+      "values": ["charity", "CIO", "CIC", "CBS", "PCC"]
+    },
+    {
+      "id": "operates_in_england",
+      "type": "equals",
+      "label": "Organisation operates in England",
+      "value": true
+    },
+    {
+      "id": "annual_income",
+      "type": "max",
+      "label": "Annual income no greater than £5,000,000",
+      "value": 5000000
+    },
+    {
+      "id": "years_serving_homeless",
+      "type": "min",
+      "label": "At least 3 years delivering services to people rough sleeping or at risk of rough sleeping",
+      "value": 3
+    },
+    {
+      "id": "la_endorsement",
+      "type": "equals",
+      "label": "Local authority homelessness lead endorsement letter available",
+      "value": true
+    }
+  ],
+  "criteria": [
+    {"id": "skills", "label": "Skills and experience", "weight": 10, "max": 3, "auto_reject_on_zero": true},
+    {"id": "proposal1", "label": "Proposal Part 1 — challenge identification with local evidence", "weight": 10, "max": 3, "auto_reject_on_zero": true},
+    {"id": "proposal2", "label": "Proposal Part 2 — project alignment to fund objectives", "weight": 30, "max": 3, "auto_reject_on_zero": true},
+    {"id": "deliverability1", "label": "Deliverability Part 1 — milestones, planning, governance", "weight": 25, "max": 3, "auto_reject_on_zero": true},
+    {"id": "deliverability2", "label": "Deliverability Part 2 — risk identification and mitigation", "weight": 5, "max": 3, "auto_reject_on_zero": true},
+    {"id": "cost_value", "label": "Cost and value — itemised budget, value for money", "weight": 10, "max": 3, "auto_reject_on_zero": true},
+    {"id": "outcomes", "label": "Outcomes and impact — measurable results, system strengthening", "weight": 10, "max": 3, "auto_reject_on_zero": true}
+  ],
+  "award_ranges": {
+    "revenue_min": 50000,
+    "revenue_max": 200000,
+    "capital_min": 50000,
+    "capital_max": 200000,
+    "total_budget": 37000000,
+    "duration_years": 3
+  },
+  "timeline": {
+    "opens_on": "2026-02-23",
+    "closes_on": "2026-03-31",
+    "assessment_window": "2026-04",
+    "moderation_window": "2026-05",
+    "outcome_notification": "2026-06",
+    "first_payments": "2026-08"
+  },
+  "forms": {
+    "application": "ehcf-application-v1",
+    "assessment": "ehcf-assessment-v1"
+  }
+}

@@ -1,0 +1,21 @@
+{% extends "govuk_frontend_jinja/template.html" %}
+
+{% block pageTitle %}{% block title %}Grants platform{% endblock %} – GOV.UK{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='govuk-frontend.min.css') }}">
+{% endblock %}
+
+{% block header %}
+  {% include "partials/header.html" %}
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block bodyEnd %}
+  <script type="module" src="{{ url_for('static', filename='govuk-frontend.min.js') }}"></script>
+  <script type="module">
+    import {{ '{' }} initAll {{ '}' }} from "{{ url_for('static', filename='govuk-frontend.min.js') }}"
+    initAll()
+  </script>
+{% endblock %}

@@ -116,19 +116,43 @@ Status updates should edit this section, not add a new one.
 Phases gate on each other; within a phase, streams run in parallel. Each phase
 ends with a demoable thin slice.
 
-### Phase 0 — Foundations (blocker for everything else)
+### Phase 0 — Foundations (blocker for everything else) ✅ done
 
 Ship together, then fan out. Target: a Flask app that boots, renders a GOV.UK
 page, talks to SQLite, and has seeded data.
 
-- P0.1 Flask app factory, config, `run.py`, `pyproject.toml` deps
-- P0.2 GOV.UK Frontend wired in (Jinja loader, base template, static assets)
-- P0.3 SQLite + SQLAlchemy models for `users`, `organisations`, `grants`, `forms`, `applications`, `documents`, `assessments`
-- P0.4 `seed.py` that loads EHCF grant config + one form schema from JSON
-- P0.5 Repo hygiene: `.gitignore`, `tests/` skeleton, one smoke test that boots the app
+- [x] P0.1 Flask app factory, config, `run.py`, `pyproject.toml` deps
+- [x] P0.2 GOV.UK Frontend wired in (Jinja loader, base template, static assets)
+- [x] P0.3 SQLite + SQLAlchemy models for `users`, `organisations`, `grants`, `forms`, `applications`, `documents`, `assessments`
+- [x] P0.4 `seed.py` that loads EHCF grant config + one form schema from JSON
+- [x] P0.5 Repo hygiene: `.gitignore`, `tests/` skeleton, one smoke test that boots the app
 
-**Done when:** `flask --app app run` serves a styled landing page listing
+**Done when:** `flask --app run run` serves a styled landing page listing
 seeded grants from the DB; `pytest` passes.
+
+**Shipped cross-stream contracts** (change these only with a coordinated update):
+- Form schema shape → `app/forms/ehcf-application-v1.json` + `app/forms_runner.py`
+- Grant config shape → `seed/grants/ehcf.json` (validated by `seed.validate_grant_config`)
+- Shared enums (`UserRole`, `GrantStatus`, `FormKind`, `ApplicationStatus`,
+  `AssessmentRecommendation`) → `app/models.py`
+- Blueprint URL prefixes: `/auth`, `/apply`, `/assess` — pre-registered in
+  `_BLUEPRINT_MODULES` so streams never edit `app/__init__.py`
+- Role decorators `applicant_required` / `assessor_required` → `app/auth.py`
+- Pure scoring API (`calculate_weighted_score`, `has_auto_reject`, ...) →
+  `app/scoring.py`
+- Pure form-runner API (`list_pages`, `validate_page`, `merge_page_answers`, ...) →
+  `app/forms_runner.py`
+- Static asset path → GOV.UK fonts/images served at `/assets/<path>` via
+  `app.public.govuk_assets` so the prebuilt CSS resolves fonts correctly.
+- Stream ownership is documented in `CONTRIBUTING.md`.
+
+**Shipped tooling:**
+- `uv` for deps and `uv run` for scripts (lockfile at `uv.lock`, Python pinned
+  via `.python-version`)
+- `Dockerfile` + `docker-compose.yml` (prod profile with gunicorn, dev profile
+  with Flask `--debug` + bind-mount)
+- `/healthz` endpoint + compose healthcheck
+- `ruff` linting config in `pyproject.toml`
 
 ### Phase 1 — Thinnest end-to-end slice
 

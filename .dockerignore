@@ -1,0 +1,33 @@
+# Follow astral-sh/uv-docker-example guidance.
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+
+.git
+.gitignore
+.github
+
+# Local DB + uploads: must not bake into the image.
+*.db
+*.sqlite
+*.sqlite3
+uploads/*
+
+# IDE / OS
+.idea
+.vscode
+.DS_Store
+
+# Tests / caches
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Docs not needed in the image
+refs/
+ideas/
+
+# Local env files
+.env
+.env.local
