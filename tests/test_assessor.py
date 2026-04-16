@@ -738,3 +738,24 @@ def test_edit_user_prevents_last_admin_self_demote(client, admin_user):
     assert b"only admin account" in resp.data
     refreshed = _db.session.get(User, admin_user.id)
     assert refreshed.role == UserRole.ADMIN
+
+
+def test_users_list_forbidden_for_non_admin_assessor(client, assessor):
+    """Plain assessors must not be able to see the user-management list."""
+    _login(client)
+    resp = client.get("/assess/users")
+    assert resp.status_code == 403
+
+
+def test_create_user_forbidden_for_non_admin_assessor(client, assessor):
+    """Plain assessors must not be able to reach the create-user form."""
+    _login(client)
+    resp = client.get("/assess/users/new")
+    assert resp.status_code == 403
+
+
+def test_edit_user_forbidden_for_non_admin_assessor(client, assessor, other_assessor):
+    """Plain assessors must not be able to edit other accounts."""
+    _login(client)
+    resp = client.get(f"/assess/users/{other_assessor.id}/edit")
+    assert resp.status_code == 403

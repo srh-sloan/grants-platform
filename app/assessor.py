@@ -893,6 +893,7 @@ def allocation():
 @bp.get("/users")
 @assessor_required
 def list_users():
+    _admin_required()
     users = db.session.execute(
         select(User).where(
             User.role.in_([UserRole.ASSESSOR, UserRole.ADMIN])
@@ -905,6 +906,7 @@ def list_users():
 @bp.route("/users/new", methods=["GET", "POST"])
 @assessor_required
 def create_user():
+    _admin_required()
     form = CreateAssessorForm()
     if form.validate_on_submit():
         email = (form.email.data or "").strip().lower()
@@ -923,6 +925,7 @@ def create_user():
 @bp.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
 @assessor_required
 def edit_user(user_id: int):
+    _admin_required()
     user = db.session.get(User, user_id)
     # Only assessor/admin accounts are managed from this surface -- the
     # accounts page intentionally excludes applicants.
