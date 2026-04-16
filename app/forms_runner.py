@@ -149,6 +149,59 @@ def merge_page_answers(
 
 
 # ---------------------------------------------------------------------------
+# Display helpers
+# ---------------------------------------------------------------------------
+
+
+def format_answer(field: dict, value: object) -> str:
+    """Format a field value for human-readable display in summaries.
+
+    Returns an empty string for ``None`` or ``""`` so callers can apply their
+    own "Not answered" fallback.  For all other types:
+
+    - ``currency`` — ``"£50,000"`` (comma-separated thousands, £ prefix)
+    - ``number`` — whole numbers drop the trailing ``.0``; decimals kept as-is
+    - ``radio`` / ``select`` — returns the matching ``option["label"]``, falls
+      back to the raw value string if no option matches
+    - ``checkbox`` — ``"Yes"`` when truthy (handles ``True``, ``"true"``,
+      ``"yes"``); ``"No"`` otherwise
+    - ``date``, ``textarea``, ``text``, ``file`` — ``str(value)``
+    """
+    if value is None or value == "":
+        return ""
+
+    field_type = field.get("type", "text")
+
+    if field_type == "currency":
+        try:
+            return f"£{int(float(str(value))):,}"
+        except ValueError:
+            return str(value)
+
+    if field_type == "number":
+        try:
+            float_val = float(str(value))
+            return str(int(float_val)) if float_val == int(float_val) else str(float_val)
+        except ValueError:
+            return str(value)
+
+    if field_type in ("radio", "select"):
+        for option in field.get("options") or []:
+            if option.get("value") == value:
+                return option["label"]
+        return str(value)
+
+    if field_type == "checkbox":
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+        if isinstance(value, str):
+            return "Yes" if value.lower() in ("true", "yes", "1") or value.strip() else "No"
+        return "Yes" if value else "No"
+
+    return str(value)
+
+
+# ---------------------------------------------------------------------------
 # Eligibility evaluator — reads rules from ``grant.config_json["eligibility"]``
 # ---------------------------------------------------------------------------
 
