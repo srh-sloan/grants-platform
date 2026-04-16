@@ -76,13 +76,15 @@
           "id": "local_challenge",
           "type": "textarea",
           "label": "Describe the homelessness challenge in your area (use local evidence)",
-          "required": true
+          "required": true,
+          "word_limit": 500
         },
         {
           "id": "project_summary",
           "type": "textarea",
           "label": "Summary of your proposed project",
-          "required": true
+          "required": true,
+          "word_limit": 500
         }
       ]
     },

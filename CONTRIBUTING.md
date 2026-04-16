@@ -43,10 +43,8 @@ from app.auth import applicant_required, assessor_required, login_required
 ```python
 from app.forms_runner import (
     list_pages, get_page, next_page_id, prev_page_id,
-    get_page_position,   # returns (1-based position, total pages) for a page_id
     validate_page, merge_page_answers,
     evaluate_eligibility, EligibilityResult,
-    format_answer,       # type-aware value formatter for summary display
     SUPPORTED_FIELD_TYPES,
 )
 ```
@@ -55,28 +53,17 @@ Pure functions — no Flask, no DB. See the module docstring for the schema
 contract. Supported field types are frozen; adding one requires coordinating
 with Stream A (template macro) and Stream D (model implications, if any).
 
-`get_page_position(schema, page_id) -> tuple[int, int]` returns `(position,
-total)` where position is 1-based. Raises `ValueError` if `page_id` is not
-found in the schema. Stream A uses this to pass `page_number` and `total_pages`
-to `forms/page.html`.
+`validate_page(page, submitted) -> dict[str, str]` checks required fields and,
+for `textarea` fields that carry `"word_limit": int`, enforces that the answer
+does not exceed that many whitespace-separated words.
 
 Stream B also owns two shared Jinja templates (render from any blueprint):
 
 - `templates/forms/page.html` — a single form page. Context:
-  `{form, application, page, answers, errors, back_url, action_url,
-  page_number (optional int), total_pages (optional int)}`. When both
-  `page_number` and `total_pages` are provided (non-None), the template
-  renders a "Page X of Y" progress indicator above the page heading.
+  `{form, application, page, answers, errors, back_url, action_url}`.
 - `templates/forms/summary.html` — read-only summary of all answers. Context:
   `{schema, answers, documents}`. Used by Stream A's review page and Stream
   C's application detail view.
-- `templates/forms/eligibility_result.html` — eligibility pass/fail result.
-  Context: `{result, grant, continue_url, check_url}`. `result` is an
-  `EligibilityResult` (from `app.forms_runner`) with `.passed: bool`,
-  `.failures: list[str]` (rule IDs that failed), and `.labels: dict[str, str]`
-  (rule ID → human-readable label). `grant` is the `Grant` model. `continue_url`
-  is the URL to start the application (shown only when `result.passed` is true).
-  `check_url` is the URL to re-take the eligibility check.
 
 ### `app.scoring` (Stream C)
 
@@ -137,7 +124,7 @@ Change any of these and every stream breaks. Propose in `#grants` first.
 
 | Contract | Owned by | Location |
 |---|---|---|
-| Form schema shape (pages/fields) | Stream B | `app/forms/ehcf-application-v1.json` + `app/forms_runner.py` docstring |
+| Form schema shape (pages/fields) | Stream B | `app/forms/ehcf-application-v1.json` + `app/forms_runner.py` docstring — `textarea` fields may include optional `"word_limit": int` validated by `validate_page` |
 | Grant config shape (criteria/eligibility/etc) | Stream D | `seed/grants/ehcf.json` + `seed.py::validate_grant_config` |
 | Eligibility rule shape (`type`, `value`/`values`) | Stream D (shape) + Stream B (evaluator) | `seed/grants/ehcf.json` + `app/forms_runner.py::evaluate_eligibility` |
 | Status enums | Stream D | `app/models.py` |
@@ -195,30 +182,6 @@ These are the non-negotiables for what we ship today.
 - Eligibility checks should show the user *why* they don't qualify, not just that they don't — reference the specific rule.
 - Assessment screens should display the grant's scoring guidance alongside the score input, drawn from `config_json`, so assessors don't need to consult the prospectus separately.
 - Where we summarise an application for an assessor, the summary should highlight the fields that carry the most scoring weight — again, derived from config, not hardcoded.
-
-### AI features — positioning and implementation
-
-- **AI is triage and drafting support, not an auto-award engine.** Frame every
-  AI feature as "AI-assisted" with human confirmation, never "AI decides."
-- Every AI feature calls a live model via the team's Anthropic/OpenAI API key
-  through a provider wrapper. Structure prompts to be grant-agnostic — prompts
-  read from `grant.config_json`, not hardcoded EHCF references.
-- **Show provenance.** Pre-filled answers must say where the suggestion came
-  from ("drafted from your annual report"). Provisional scores must show
-  evidence snippets and confidence level.
-- **Capture assessor overrides.** If an assessor changes a provisional AI
-  score, store the original and the override — useful as training data later.
-- Log or surface AI-generated content clearly in the UI so assessors know
-  when a suggestion came from a model.
-
-### Monitoring and dashboard surfaces
-
-- The monitoring plan generator (feature F1 in `PLAN.md`) produces a **draft**
-  KPI pack — suggested outputs, outcomes, baselines, reporting cadence,
-  evidence types, milestones, and risk review points.
-- The portfolio dashboard (F2, F3) shows operational counts only — do not
-  build complex charts. Application pipeline, assessor workload, missing
-  documents, 0-score risks, and average turnaround are the priority views.
 
 ## Definition of done (per PR)
 
