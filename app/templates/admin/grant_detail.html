@@ -63,7 +63,7 @@
     <h2 class="govuk-heading-l">Grant details</h2>
 
     {{ govukSummaryList({"rows": [
-      {"key": {"text": "Slug"},          "value": {"html": "<code>" ~ grant.slug ~ "</code>"}},
+      {"key": {"text": "Slug"},          "value": {"html": "<code>" ~ (grant.slug | e) ~ "</code>"}},
       {"key": {"text": "Summary"},       "value": {"text": grant.config_json.get("summary", "—")}},
       {"key": {"text": "Contact email"}, "value": {"text": grant.config_json.get("contact_email", "—")}},
       {"key": {"text": "Total budget"},  "value": {"text": "£{:,.0f}".format(award_ranges.get("total_budget") or 0) if award_ranges.get("total_budget") else "—"}},
@@ -79,7 +79,7 @@
       {% for rule in eligibility %}
       <li>
         {{ rule.label }}
-        <span class="govuk-hint govuk-!-display-inline govuk-!-margin-left-1">
+        <span class="govuk-hint app-inline govuk-!-margin-left-1">
           ({{ rule.type }}:
           {% if rule.type == "in" %}{{ rule['values'] | join(", ") }}
           {% else %}{{ rule.value }}{% endif %})
@@ -94,10 +94,11 @@
     {# --- Scoring criteria --- #}
     <h2 class="govuk-heading-m govuk-!-margin-top-6">
       Scoring criteria
-      <span class="govuk-hint govuk-!-display-inline govuk-!-margin-left-1">(weights total: {{ weight_total }}/100)</span>
+      <span class="govuk-hint app-inline govuk-!-margin-left-1">(weights total: {{ weight_total }}/100)</span>
     </h2>
     {% if criteria %}
     <table class="govuk-table">
+      <caption class="govuk-table__caption govuk-visually-hidden">Scoring criteria</caption>
       <thead class="govuk-table__head">
         <tr class="govuk-table__row">
           <th class="govuk-table__header">Criterion</th>

@@ -46,7 +46,6 @@ from app.forms_runner import (
     get_page,
     list_pages,
     merge_page_answers,
-    next_page_id,
     prev_page_id,
     validate_page,
 )
@@ -262,7 +261,6 @@ def dashboard():
         "applicant/dashboard.html",
         applications=applications,
         available_grants=available_grants,
-        start_form=_ActionForm(),
     )
 
 
@@ -296,7 +294,10 @@ def eligibility(grant_slug: str):
         # Grant has no eligibility form — skip straight to start.
         return redirect(url_for("applicant.start", grant_slug=grant.slug))
 
-    page = list_pages(elig_form.schema_json)[0]
+    pages = list_pages(elig_form.schema_json)
+    if not pages:
+        return redirect(url_for("applicant.start", grant_slug=grant.slug))
+    page = pages[0]
     # The page.html template expects an ``application`` with ``grant`` — use a
     # lightweight stand-in since no application exists yet.
     fake_app = SimpleNamespace(id=None, grant=grant)
@@ -337,7 +338,10 @@ def eligibility_post(grant_slug: str):
     if elig_form is None:
         return redirect(url_for("applicant.start", grant_slug=grant.slug))
 
-    page = list_pages(elig_form.schema_json)[0]
+    pages = list_pages(elig_form.schema_json)
+    if not pages:
+        return redirect(url_for("applicant.start", grant_slug=grant.slug))
+    page = pages[0]
     submitted = _extract_field_values(page, request.form)
     errors = validate_page(page, submitted)
 

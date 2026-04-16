@@ -10,7 +10,11 @@
         administrator.
       </p>
       <p class="govuk-body">
-        You can <a class="govuk-link" href="{{ url_for('auth.logout') }}">sign out</a>
+        You can
+        <form method="post" action="{{ url_for('auth.logout') }}" class="app-link-button-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="app-link-button">sign out</button>
+        </form>
         and sign in with a different account if you have one.
       </p>
       <p class="govuk-body">

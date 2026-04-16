@@ -46,20 +46,6 @@
       {% if plan.get("kpis") %}
         <h2 class="govuk-heading-l">Key performance indicators</h2>
 
-        {{ govukTable({
-          "head": [
-            {"text": "KPI"},
-            {"text": "Definition"},
-            {"text": "Target"},
-            {"text": "Baseline"},
-            {"text": "Evidence source"},
-            {"text": "Frequency"},
-            {"text": "Owner"}
-          ],
-          "rows": plan["kpis"] | map(attribute=None) | list if false else [],
-          "classes": "govuk-table"
-        }) if false }}
-
         <table class="govuk-table">
           <caption class="govuk-table__caption govuk-table__caption--m govuk-visually-hidden">Key performance indicators</caption>
           <thead class="govuk-table__head">

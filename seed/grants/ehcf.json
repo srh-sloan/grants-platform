@@ -32,9 +32,8 @@
     },
     {
       "id": "la_endorsement",
-      "type": "equals",
-      "label": "Local authority homelessness lead endorsement letter available",
-      "value": true
+      "type": "present",
+      "label": "Local authority homelessness lead endorsement letter available"
     }
   ],
   "criteria": [
@@ -169,6 +168,7 @@
   },
   "forms": {
     "application": "ehcf-application-v1",
-    "assessment": "ehcf-assessment-v1"
+    "assessment": "ehcf-assessment-v1",
+    "eligibility": "ehcf-eligibility-v1"
   }
 }

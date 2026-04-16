@@ -419,4 +419,7 @@ def _check_rule(rule: dict, answers: dict) -> bool:
         except (TypeError, ValueError):
             return False
 
+    if rule_type == "present":
+        return bool(raw)
+
     raise ValueError(f"Unknown rule type: {rule_type!r}")

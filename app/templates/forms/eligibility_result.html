@@ -35,7 +35,7 @@
 
         {{ govukPanel({
           "titleText": "You appear to be eligible",
-          "html": "Based on your answers, your organisation meets the eligibility criteria for <strong>" ~ grant.name ~ "</strong>."
+          "html": "Based on your answers, your organisation meets the eligibility criteria for <strong>" ~ (grant.name | e) ~ "</strong>."
         }) }}
 
         <p class="govuk-body govuk-!-margin-top-6">
@@ -74,7 +74,7 @@
         {% set contact_email = grant.config_json.get("contact_email") if grant.config_json else None %}
         {% if contact_email %}
           {{ govukInsetText({
-            "html": "If you believe this is incorrect, contact <a class=\"govuk-link\" href=\"mailto:" ~ contact_email ~ "\">" ~ contact_email ~ "</a>."
+            "html": "If you believe this is incorrect, contact <a class=\"govuk-link\" href=\"mailto:" ~ (contact_email | e) ~ "\">" ~ (contact_email | e) ~ "</a>."
           }) }}
         {% endif %}
 

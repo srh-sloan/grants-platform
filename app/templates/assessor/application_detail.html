@@ -85,7 +85,7 @@
 
     {% if application.answers_json %}
       {% for page_id, page_answers in application.answers_json.items() %}
-        <h3 class="govuk-heading-m govuk-!-text-transform-capitalize">
+        <h3 class="govuk-heading-m">
           {{ page_id | replace("_", " ") | replace("-", " ") | title }}
         </h3>
         {% if page_answers is mapping %}

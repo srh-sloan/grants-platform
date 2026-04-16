@@ -41,7 +41,7 @@ _APPLICATIONS = [
                 "registration_number": "CE012345",
                 "annual_income": 480000,
                 "years_serving_homeless": 7,
-                "operates_in_england": "yes",
+                "operates_in_england": "true",
             },
             "proposal": {
                 "project_name": "Community Navigation and Recovery Programme",
@@ -88,6 +88,7 @@ _APPLICATIONS = [
                     "safeguarding policy reviewed annually by trustee board; clear escalation pathway "
                     "to local authority MARAC."
                 ),
+                "la_endorsement": "demo-la-endorsement-letter.pdf",
             },
             "declaration": {
                 "contact_name": "Dr Amara Osei",
@@ -109,7 +110,7 @@ _APPLICATIONS = [
                 "registration_number": "1198734",
                 "annual_income": 920000,
                 "years_serving_homeless": 11,
-                "operates_in_england": "yes",
+                "operates_in_england": "true",
             },
             "proposal": {
                 "project_name": "Night Shelter Enhancement and Day Centre Expansion",
@@ -147,6 +148,7 @@ _APPLICATIONS = [
                     "Building lease renewal due Year 2: landlord engaged, renewal expected. "
                     "Safeguarding: lone worker policy in place, all staff trained annually."
                 ),
+                "la_endorsement": "demo-la-endorsement-letter.pdf",
             },
             "declaration": {
                 "contact_name": "Priya Nair",
@@ -168,7 +170,7 @@ _APPLICATIONS = [
                 "registration_number": "14567890",
                 "annual_income": 120000,
                 "years_serving_homeless": 3,
-                "operates_in_england": "yes",
+                "operates_in_england": "true",
             },
             "proposal": {
                 "project_name": "Peer Support and Recovery Project",
@@ -196,6 +198,7 @@ _APPLICATIONS = [
                 "risks": (
                     "Volunteers might not be available. We will manage this by recruiting more."
                 ),
+                "la_endorsement": "demo-la-endorsement-letter.pdf",
             },
             "declaration": {
                 "contact_name": "James Bell",

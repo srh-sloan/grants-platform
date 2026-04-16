@@ -22,6 +22,16 @@
   text-decoration: underline;
 }
 
+/* Monospace textarea — for JSON / code editing fields in admin pages */
+.app-textarea--monospace {
+  font-family: "Menlo", "Consolas", "Courier New", monospace;
+}
+
+/* Inline display utility */
+.app-inline {
+  display: inline;
+}
+
 /* Over-budget row highlight for the allocation dashboard table */
 .app-row--over-budget {
   background-color: #f3d3c9;
@@ -46,6 +56,27 @@
 
 .app-grant-list__item:last-child {
   padding-bottom: 10px;
+}
+
+/* Link-styled button — used in place of <a> for POST-only endpoints
+   (e.g. sign-out links in error pages). */
+.app-link-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  color: #1d70b8;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+}
+
+.app-link-button:hover {
+  color: #003078;
+}
+
+.app-link-button-form {
+  display: inline;
 }
 
 /* Flash-message banners sit between the phase banner's bottom border and the
