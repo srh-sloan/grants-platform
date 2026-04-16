@@ -61,9 +61,15 @@
                 </td>
                 <td class="govuk-table__cell">
                   {% if app.status.value == "draft" %}
-                    <a class="govuk-link" href="{{ url_for('applicant.start', grant_slug=app.grant.slug) }}">
-                      Continue<span class="govuk-visually-hidden"> application for {{ app.grant.name }}</span>
-                    </a>
+                    {% if app.id in complete_draft_ids %}
+                      <a class="govuk-link" href="{{ url_for('applicant.review', app_id=app.id) }}">
+                        Review and submit<span class="govuk-visually-hidden"> application for {{ app.grant.name }}</span>
+                      </a>
+                    {% else %}
+                      <a class="govuk-link" href="{{ url_for('applicant.start', grant_slug=app.grant.slug) }}">
+                        Continue<span class="govuk-visually-hidden"> application for {{ app.grant.name }}</span>
+                      </a>
+                    {% endif %}
                   {% else %}
                     <a class="govuk-link" href="{{ url_for('applicant.review', app_id=app.id) }}">
                       View<span class="govuk-visually-hidden"> application for {{ app.grant.name }}</span>
