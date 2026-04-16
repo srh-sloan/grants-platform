@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import pathlib
+
 import pytest
 
 from app.forms_runner import (
@@ -220,3 +223,102 @@ def test_labels_contains_every_rule_regardless_of_pass_fail():
     assert set(result.labels.keys()) == expected_ids
     # Spot-check one label value.
     assert result.labels["org_type"] == "Organisation type must be charity, CIO, CIC, CBS or PCC"
+
+
+# ---------------------------------------------------------------------------
+# word_limit validation (P4.2)
+# ---------------------------------------------------------------------------
+
+_WORD_LIMIT_PAGE = {
+    "fields": [
+        {
+            "id": "summary",
+            "type": "textarea",
+            "label": "Summary",
+            "required": True,
+            "word_limit": 5,
+        }
+    ]
+}
+
+_OPTIONAL_WORD_LIMIT_PAGE = {
+    "fields": [
+        {
+            "id": "notes",
+            "type": "textarea",
+            "label": "Notes",
+            "required": False,
+            "word_limit": 5,
+        }
+    ]
+}
+
+
+def test_word_limit_under_limit():
+    errors = validate_page(_WORD_LIMIT_PAGE, {"summary": "one two three four"})
+    assert "summary" not in errors
+
+
+def test_word_limit_at_boundary():
+    errors = validate_page(_WORD_LIMIT_PAGE, {"summary": "one two three four five"})
+    assert "summary" not in errors
+
+
+def test_word_limit_over_limit():
+    errors = validate_page(_WORD_LIMIT_PAGE, {"summary": "one two three four five six"})
+    assert "summary" in errors
+    assert "5 words or fewer" in errors["summary"]
+    assert "6 words" in errors["summary"]
+
+
+def test_word_limit_empty_optional_no_error():
+    errors = validate_page(_OPTIONAL_WORD_LIMIT_PAGE, {"notes": ""})
+    assert "notes" not in errors
+
+
+def test_word_limit_empty_required_gives_required_error_not_word_count():
+    errors = validate_page(_WORD_LIMIT_PAGE, {"summary": ""})
+    assert "summary" in errors
+    assert errors["summary"] == "This field is required"
+    assert "words" not in errors["summary"]
+
+
+def test_word_limit_ignored_on_text_field():
+    # word_limit on a non-textarea field must not trigger word-count validation
+    page = {
+        "fields": [
+            {"id": "tag", "type": "text", "label": "Tag", "required": False, "word_limit": 3}
+        ]
+    }
+    errors = validate_page(page, {"tag": " ".join(["word"] * 10)})
+    assert "tag" not in errors
+
+
+def test_word_limit_and_required_violation_on_different_fields():
+    page = {
+        "fields": [
+            {"id": "title", "type": "text", "label": "Title", "required": True},
+            {
+                "id": "body",
+                "type": "textarea",
+                "label": "Body",
+                "required": False,
+                "word_limit": 3,
+            },
+        ]
+    }
+    errors = validate_page(page, {"title": "", "body": "one two three four"})
+    assert "title" in errors
+    assert "body" in errors
+
+
+def test_ehcf_local_challenge_and_project_summary_have_word_limit():
+    schema_path = pathlib.Path("app/forms/ehcf-application-v1.json")
+    schema = json.loads(schema_path.read_text())
+    fields_by_id = {
+        field["id"]: field
+        for page in schema["pages"]
+        for field in page["fields"]
+    }
+    assert fields_by_id["local_challenge"].get("word_limit") == 500
+    assert fields_by_id["project_summary"].get("word_limit") == 500
