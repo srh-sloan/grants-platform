@@ -179,6 +179,30 @@ These are the non-negotiables for what we ship today.
 - Assessment screens should display the grant's scoring guidance alongside the score input, drawn from `config_json`, so assessors don't need to consult the prospectus separately.
 - Where we summarise an application for an assessor, the summary should highlight the fields that carry the most scoring weight — again, derived from config, not hardcoded.
 
+### AI features — positioning and implementation
+
+- **AI is triage and drafting support, not an auto-award engine.** Frame every
+  AI feature as "AI-assisted" with human confirmation, never "AI decides."
+- Every AI feature calls a live model via the team's Anthropic/OpenAI API key
+  through a provider wrapper. Structure prompts to be grant-agnostic — prompts
+  read from `grant.config_json`, not hardcoded EHCF references.
+- **Show provenance.** Pre-filled answers must say where the suggestion came
+  from ("drafted from your annual report"). Provisional scores must show
+  evidence snippets and confidence level.
+- **Capture assessor overrides.** If an assessor changes a provisional AI
+  score, store the original and the override — useful as training data later.
+- Log or surface AI-generated content clearly in the UI so assessors know
+  when a suggestion came from a model.
+
+### Monitoring and dashboard surfaces
+
+- The monitoring plan generator (feature F1 in `PLAN.md`) produces a **draft**
+  KPI pack — suggested outputs, outcomes, baselines, reporting cadence,
+  evidence types, milestones, and risk review points.
+- The portfolio dashboard (F2, F3) shows operational counts only — do not
+  build complex charts. Application pipeline, assessor workload, missing
+  documents, 0-score risks, and average turnaround are the priority views.
+
 ## Definition of done (per PR)
 
 Every PR, regardless of stream:

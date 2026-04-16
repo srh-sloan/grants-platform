@@ -90,6 +90,38 @@ given feature.
 | C7 | Notifications (email on status change, deadline reminders) | all |
 | C8 | Admin UI for creating grants without touching JSON files | stretch |
 
+### AI-assisted features
+
+These features call a live AI model via the team's Anthropic/OpenAI API key.
+The provider wrapper keeps prompts grant-agnostic — every prompt reads from
+`grant.config_json`, not hardcoded EHCF references — so the same AI layer works
+across all grants added via the Grant Builder. AI is positioned as
+**triage and drafting support**, not autonomous decision-making.
+
+| # | Feature | Challenge | Description |
+|---|---|---|---|
+| D1 | `prefill_application()` | 1, 2 | Input: uploaded docs + grant form schema. Output: suggested field values + provenance. Shows "Suggested answer generated from [source doc]." User edits and confirms manually. |
+| D2 | `score_application()` | 3 | Input: application answers + rubric + uploaded docs. Output per criterion: provisional score 0–3, confidence, evidence found, evidence missing, recommendation for assessor. |
+| D3 | `generate_monitoring_plan()` | 4 | Input: approved application + monitoring template. Output: KPI list, reporting frequency, evidence types, milestone table. |
+| D4 | `extract_grant_structure()` | 2 | Stretch only. Upload prospectus text → draft grant definition. Human must review before publish. |
+
+### Grant Builder and Publisher (internal)
+
+| # | Feature | Description |
+|---|---|---|
+| E1 | Grant definition UI | UX-friendly interface for department staff to create a fund round: define objectives, eligibility rules, scoring criteria (with weights), required documents, and reporting requirements — no code or JSON editing required |
+| E2 | Grant preview and publish | Preview draft grant; publish makes it visible to applicants |
+| E3 | Assisted grant onboarding | Upload a prospectus → AI drafts the grant structure (D4); staff reviews and approves through the same UI before publish |
+| E4 | Clone existing grant | Clone a published grant into a new draft, then edit fields through the UI — the fastest path for a new round of an existing programme |
+
+### Monitoring and portfolio
+
+| # | Feature | Description |
+|---|---|---|
+| F1 | KPI/monitoring plan generator | Draft monitoring pack for approved applications: outputs, outcomes, baselines, reporting cadence, evidence types, milestones, risk review points |
+| F2 | Portfolio dashboard | Active funds, applications by stage, assessor workload, SLA risk, common rejection reasons, funding demand by objective/region/org type |
+| F3 | Director view | Application counts, ready-for-review, missing-document count, 0-score risk count, average turnaround, monitoring submissions due/overdue |
+
 ---
 
 ## What's in v0 vs deferred
@@ -97,11 +129,16 @@ given feature.
 **v0 (must have, end-to-end for EHCF):**
 A1, A2, A3, A4, A5 (subset — one stage), A6 (core field types only), A7, A10,
 A12, A13, B1, B2, B3, B4, B5, B6, B10, B13, C1, C2, C3, C4.
+AI features: D1 (pre-fill via live AI), D2 (scoring via live AI),
+D3 (monitoring plan via live AI).
+New surfaces: E1–E4 (Grant Builder UI — department staff can add grants without
+touching code), F1 (KPI generator), F2/F3 (portfolio/director dashboard — counts only).
 
 **v1 (second grant + flexibility proof):**
 A8, A9, A11, B7, B11, B12, C5. Pick *one* second grant (Common Ground is
 cheapest — small, single-stage, non-uniform weights; Changing Futures is
 next — adds word limits + Pass/Fail gates).
+AI features: D4 (prospectus-to-form extraction — assisted onboarding stretch).
 
 **Deferred (post-hackathon):**
 A14 email, B8 panel interviews, B9 moderation workflow, C6 post-award, C7
@@ -483,3 +520,122 @@ merged but nobody else's stream can build on it, it's not done.
 - **Prefer deleting scope over delaying a phase.** Cutting a field, skipping
   a page, or hardcoding one screen is fine if it keeps the phase on track —
   flag it in this file under the phase so it doesn't get lost.
+
+---
+
+## Challenge mapping
+
+The prototype addresses all four hackathon challenges through one connected
+journey rather than four unrelated features:
+
+| Challenge | Features that answer it |
+|---|---|
+| **1: From PDF to digital service** | Grant Builder (E1–E4), Applicant Workspace (A1–A13), save-and-return (A7), validation, checklist, submission confirmation (A12), optional prospectus-to-draft-form assist (D4) |
+| **2: Unlocking the dark data** | Prospectus/guidance ingestion (D4), AI pre-fill from uploaded docs (D1), criteria extractor, reusable grant schema (C1, C2), evidence retrieval for assessors (D2) |
+| **3: Supporting casework decisions** | Assessor Workbench (B1–B6), eligibility gate (A2), per-criterion triage (D2), missing evidence detection, 0-score risk flags, next-best-action panel |
+| **4: Knowing your own organisation** | Portfolio dashboard (F2), director view (F3), assessor workload, common failure/rework patterns, KPI monitoring setup (F1), cross-fund comparability |
+
+---
+
+## Sprint plan (12:00–15:00)
+
+This section integrates with the phased build order above. The goal is to have
+all five surfaces demoable by 15:00. Feature freeze at **14:15** — after that,
+only fixes, content, and demo rehearsal.
+
+### Decisions locked (do not reopen)
+
+1. Flask + SQLite + SQLAlchemy + Jinja + GOV.UK Frontend
+2. One seeded real grant: EHCF
+3. Grant Builder UI allows department staff to add further grants without touching code — scalable from day one, not hardcoded clones
+4. Seeded demo accounts for Applicant and Assessor views; real Flask-Login auth is already implemented
+5. AI calls a live model via the team's Anthropic/OpenAI API key — not mocked
+6. AI positioned as **triage and drafting support**, not autonomous decisions
+7. Feature freeze at 14:15
+
+### Build order for today
+
+1. **Seed EHCF as one grant definition** — hardcode or load JSON for objectives,
+   eligibility rules, criteria, required documents. Use the real prospectus as
+   source of truth. Seed demo accounts for Applicant and Assessor (auth is
+   already implemented with Flask-Login).
+2. **Build one applicant journey** — eligibility check → upload docs → answer
+   2–3 key sections → save draft → submit.
+3. **Build one assessor page** — view application → view missing docs → view
+   AI-assisted criterion scores → view evidence snippets → override score.
+4. **Build one monitoring output** — click "Generate monitoring plan" → show
+   KPI pack based on the application (calls live AI).
+5. **Build the Grant Builder UI** — department staff can add a second grant
+   through the interface without touching code; proves reusability.
+
+### What each page must show
+
+**Applicant task list:**
+- Check eligibility
+- Upload documents
+- Organisation details
+- Proposal and fit to fund
+- Outcomes and value
+- Review and submit
+
+**Assessor detail page (per criterion):**
+- Criterion name
+- Weight
+- Provisional score
+- Evidence found
+- Evidence missing
+- Override box
+
+**Monitoring page:**
+- KPI name, definition
+- Target / baseline placeholder
+- Evidence source
+- Reporting frequency
+- Owner
+
+**Director dashboard:**
+- Applications submitted
+- Complete applications
+- Missing support letters
+- Likely 0-score risks
+- Ready-for-review count
+- Average provisional score
+
+---
+
+## Cut order (if time slips)
+
+Cut in this order — go wide, not deep:
+
+1. Second grant creation UI
+2. Prospectus-to-form ingestion (D4)
+3. Dashboard charts (keep counts only)
+4. Document provenance niceties
+5. Advanced AI features (D3 monitoring plan, D4 prospectus extraction) — keep D1 pre-fill and D2 scoring as the core AI surface
+6. Any real file parsing beyond basic filename handling
+
+Do **not** cut:
+- Submission flow
+- Assessor page
+- Provisional criterion scoring
+- Monitoring output
+- README / demo story
+
+---
+
+## Demo definition of done (15:00)
+
+The prototype is done when all of the following are true:
+
+1. Repo is clean and has a readable README
+2. App starts locally without explanation gymnastics
+3. EHCF seed grant exists
+4. Applicant can complete and submit a seeded application
+5. Assessor can review one application with AI-assisted provisional scoring
+6. Monitoring plan can be generated
+7. Dashboard shows portfolio counts
+8. Demo script is written
+9. One person can demo the whole thing in 4 minutes
+
+This matches the brief's requirement for a real user, a clear gap, and a
+working prototype judges can actually see.

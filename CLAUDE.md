@@ -46,8 +46,11 @@ Before acting on any task:
 
 ## Project Overview
 
-A flexible grants application and assessment system. First grant onboarded:
-the **Ending Homelessness in Communities Fund (EHCF)**, administered by MHCLG.
+**GrantOS** is a reusable internal government grants platform with five
+connected surfaces: **grant builder**, **applicant workspace**, **assessor
+workbench**, **monitoring/KPI generator**, and **portfolio dashboard**. First
+grant onboarded: the **Ending Homelessness in Communities Fund (EHCF)**,
+administered by MHCLG.
 Two user types:
 
 - **Applicants** — voluntary, community, and faith sector (VCFS) organisations
@@ -154,6 +157,28 @@ blobs keyed by a form schema.
 
 Columns may evolve — treat this as a starting point, not a spec.
 
+### Additional model concepts (from product vision)
+
+These extend the core model for the monitoring, AI, and portfolio surfaces.
+They are additive — they do not change any existing tables.
+
+### `kpi_templates`
+- `id`, `grant_id` (nullable — some KPIs are reusable across grants)
+- `indicator_name`, `definition`, `evidence_type`, `reporting_frequency`
+- `owner` (which role reports on it)
+- Used by the monitoring plan generator to produce grant- and application-specific packs.
+
+### `monitoring_plans`
+- `id`, `application_id`
+- `kpis_json` — generated list of KPI lines, targets, baselines, cadence
+- `milestones_json` — milestone checkpoints with dates
+- `generated_at`, `confirmed_by` (nullable — human must review)
+
+### `knowledge_packs`
+- `id`, `grant_id`
+- `content_json` — prospectus/guidance/FAQ chunks, structured for retrieval
+- Used by AI features to ground pre-fill and scoring in the published rubric.
+
 ---
 
 ## Scoring (data-driven)
@@ -187,6 +212,46 @@ A grant config snippet looks like:
 
 ---
 
+## AI Features (provider wrapper pattern)
+
+All AI features call a live model via the team's Anthropic/OpenAI API key
+through a provider wrapper. The wrapper keeps prompts grant-agnostic —
+every prompt reads from `grant.config_json`, not hardcoded EHCF references
+— so the same AI layer works across all grants added via the Grant Builder.
+
+AI is positioned as **triage and drafting support**, not autonomous
+decision-making. Never frame AI as "auto-approval" or "automated award
+decision". The right phrase is "AI-assisted rubric scoring and triage."
+
+### `prefill_application(docs, schema) → {field_id: {value, source}}`
+
+Input: uploaded documents + grant form schema.
+Output: suggested field values with provenance.
+Display: "Suggested answer generated from your annual report / project plan."
+The user edits and confirms manually — never silently write into the final
+application.
+
+### `score_application(answers, rubric, docs) → [{criterion_id, score, confidence, evidence_found, evidence_missing, recommendation}]`
+
+Input: application answers + rubric + uploaded docs.
+Output per criterion: provisional score 0–3, confidence, evidence found,
+evidence missing, recommendation for assessor.
+Assessor reviews, edits, and confirms. If they change the score, store the
+original and the override.
+
+### `generate_monitoring_plan(application, template) → {kpis, milestones, cadence}`
+
+Input: approved application + monitoring template from grant config.
+Output: KPI list, reporting frequency, evidence types, milestone table.
+Human must review before the plan is confirmed.
+
+### `extract_grant_structure(prospectus_text) → draft_grant_config`
+
+Stretch feature only. Upload prospectus text → draft grant definition.
+Human must edit and approve before publish.
+
+---
+
 ## Key User Flows
 
 ### Applicant
@@ -195,16 +260,30 @@ A grant config snippet looks like:
 3. **Multi-step application** — form runner renders pages from the JSON
    schema. Each page saves as draft.
 4. **Upload supporting documents** — budget, project plan, LA support letter, risk register.
-5. **Review & submit** — read-only summary, then submit (no withdrawal).
-6. **Track status** — dashboard shows state transitions.
+5. **AI pre-fill** — system suggests draft answers from uploaded documents with provenance; user edits and confirms.
+6. **Review & submit** — read-only summary, task-list checklist, then submit (no withdrawal).
+7. **Track status** — dashboard shows state transitions.
 
 ### Assessor
 1. **Application list** — filters (status, LA area, funding type, score).
-2. **Application detail** — applicant answers alongside the scoring form.
-3. **Score each criterion** — 0–3 with mandatory notes.
-4. **Flag for moderation** — borderline or conflicted.
-5. **Allocation dashboard** — ranked by weighted score, running total against
+2. **Eligibility gate** — deterministic pass/fail from rules, shown as flags.
+3. **Application detail** — applicant answers alongside the scoring form.
+4. **AI-assisted triage** — per-criterion provisional scores, evidence snippets, 0-score risk flags, confidence levels, missing evidence detection.
+5. **Score each criterion** — 0–3 with mandatory notes; override AI provisional score.
+6. **Flag for moderation** — borderline or conflicted.
+7. **Allocation dashboard** — ranked by weighted score, running total against
    the grant's budget.
+
+### Grant Admin
+1. **View grant definitions** — see EHCF config, criteria, eligibility rules.
+2. **Clone and edit** — duplicate a grant to create a draft second grant.
+3. **Preview and publish** — make a grant round visible to applicants.
+4. **Assisted onboarding** (stretch) — upload prospectus → draft structure → human review → publish.
+
+### Monitoring / Leadership
+1. **Generate monitoring plan** — for an approved application, produce draft KPIs, milestones, cadence.
+2. **Portfolio dashboard** — active funds, applications by stage, assessor workload.
+3. **Director view** — application counts, ready-for-review, missing docs, 0-score risks, average turnaround.
 
 ---
 
