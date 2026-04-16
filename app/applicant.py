@@ -177,6 +177,15 @@ def _extract_field_values(page: dict, form_data: MultiDict) -> dict[str, object]
             # separately in save_page. We return None here; save_page
             # supplements with the existing saved answer before validation.
             extracted[fid] = None
+        elif ftype == "date":
+            # govukDateInput submits three separate fields: fid-day, fid-month, fid-year.
+            day   = (form_data.get(f"{fid}-day")   or "").strip()
+            month = (form_data.get(f"{fid}-month") or "").strip()
+            year  = (form_data.get(f"{fid}-year")  or "").strip()
+            if day and month and year:
+                extracted[fid] = f"{year.zfill(4)}-{month.zfill(2)}-{day.zfill(2)}"
+            else:
+                extracted[fid] = ""  # empty string triggers required validation
         else:
             value = form_data.get(fid)
             if isinstance(value, str):
@@ -222,7 +231,6 @@ def dashboard():
         applications=applications,
         available_grants=available_grants,
         start_form=_ActionForm(),
-        logout_form=_ActionForm(),
     )
 
 
@@ -273,6 +281,7 @@ def eligibility(grant_slug: str):
         csrf_form=_ActionForm(),
         all_pages=None,
         current_index=0,
+        form_caption="Eligibility check",
     )
 
 
@@ -316,6 +325,7 @@ def eligibility_post(grant_slug: str):
             csrf_form=_ActionForm(),
             all_pages=None,
             current_index=0,
+            form_caption="Eligibility check",
         )
         return rendered, 400
 

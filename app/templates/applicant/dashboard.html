@@ -34,14 +34,6 @@
         {% endif %}.
       </p>
 
-      <form method="post" action="{{ url_for('auth.logout') }}" class="govuk-!-margin-bottom-6">
-        {{ logout_form.hidden_tag() }}
-        {{ govukButton({
-          "text": "Sign out",
-          "classes": "govuk-button--secondary"
-        }) }}
-      </form>
-
       <h2 class="govuk-heading-l">Applications in progress</h2>
 
       {% if applications %}
