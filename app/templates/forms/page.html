@@ -1,46 +1,247 @@
 {#
   Shared applicant form page — owned by Stream B.
 
+  Renders actual GOV.UK Frontend field macros for all supported types:
+  text, textarea, radio, checkbox, select, number, currency, date, file.
+
   Context:
     form         — Form model
-    application  — Application model
-    page         — page dict from the JSON schema
+    application  — Application model (has .grant.name)
+    page         — page dict from the JSON schema {id, title, fields}
     answers      — {field_id: value} for this page (may be empty)
     errors       — {field_id: "message"} (may be empty)
     action_url   — POST target (built by Stream A)
     back_url     — optional previous-page URL (built by Stream A)
-    page_number  — (optional) 1-based index of this page; omit or pass None
-    total_pages  — (optional) total number of pages; omit or pass None
-
-  When both page_number and total_pages are provided the template renders a
-  "Page X of Y" progress line above the page heading. Stream A computes these
-  by calling forms_runner.get_page_position(schema, page_id).
+    csrf_form    — FlaskForm with just CSRF token (optional in tests)
+    all_pages    — list of all page dicts (optional, for progress indicator)
+    current_index — 0-based index of current page (optional)
+    page_number  — (optional) 1-based index, legacy compat
+    total_pages  — (optional) total number of pages, legacy compat
 #}
 {% extends "base.html" %}
 
+{% from "govuk_frontend_jinja/components/input/macro.html" import govukInput %}
+{% from "govuk_frontend_jinja/components/textarea/macro.html" import govukTextarea %}
+{% from "govuk_frontend_jinja/components/radios/macro.html" import govukRadios %}
+{% from "govuk_frontend_jinja/components/checkboxes/macro.html" import govukCheckboxes %}
+{% from "govuk_frontend_jinja/components/select/macro.html" import govukSelect %}
+{% from "govuk_frontend_jinja/components/date-input/macro.html" import govukDateInput %}
+{% from "govuk_frontend_jinja/components/file-upload/macro.html" import govukFileUpload %}
+{% from "govuk_frontend_jinja/components/button/macro.html" import govukButton %}
+{% from "govuk_frontend_jinja/components/error-summary/macro.html" import govukErrorSummary %}
+{% from "govuk_frontend_jinja/components/back-link/macro.html" import govukBackLink %}
+
 {% block title %}{{ page.title }}{% endblock %}
+
+{% block beforeContent %}
+  {{ super() }}
+  {% if back_url %}
+    {{ govukBackLink({"href": back_url, "text": "Back"}) }}
+  {% endif %}
+{% endblock %}
 
 {% block content %}
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
+
+      {# --- Error summary at top when validation fails --- #}
+      {% if errors %}
+        {% set error_items = [] %}
+        {% for field in page.fields %}
+          {% if field.id in errors %}
+            {% set _ = error_items.append({
+              "text": errors[field.id],
+              "href": "#" ~ field.id
+            }) %}
+          {% endif %}
+        {% endfor %}
+        {{ govukErrorSummary({
+          "titleText": "There is a problem",
+          "errorList": error_items
+        }) }}
+      {% endif %}
+
+      {# --- Grant name caption --- #}
       <span class="govuk-caption-l">{{ application.grant.name }}</span>
-      {% if page_number and total_pages %}
+
+      {# --- Page progress indicator --- #}
+      {% if all_pages is defined and all_pages and current_index is defined and current_index is not none %}
+        <p class="govuk-body-s govuk-!-colour-secondary">Page {{ current_index + 1 }} of {{ all_pages|length }}</p>
+      {% elif page_number is defined and page_number and total_pages is defined and total_pages %}
         <p class="govuk-body-s govuk-!-colour-secondary">Page {{ page_number }} of {{ total_pages }}</p>
       {% endif %}
+
+      {# --- Page heading --- #}
       <h1 class="govuk-heading-xl">{{ page.title }}</h1>
 
-      <div class="govuk-inset-text">
-        Form page renderer is a Stream B placeholder. Fields to come:
-        <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-2">
-          {% for field in page.fields %}
-            <li><code>{{ field.id }}</code> ({{ field.type }}){% if field.required %} <strong>required</strong>{% endif %}</li>
-          {% endfor %}
-        </ul>
-      </div>
+      {# --- Form wrapping all fields --- #}
+      <form action="{{ action_url }}" method="post" novalidate>
+        {% if csrf_form is defined and csrf_form %}
+          {{ csrf_form.hidden_tag() }}
+        {% endif %}
 
-      {% if errors %}
-        <p class="govuk-error-message">{{ errors|length }} field(s) need attention.</p>
-      {% endif %}
+        {% for field in page.fields %}
+          {% set field_value = answers.get(field.id) if answers else None %}
+          {% set field_error = errors.get(field.id) if errors else None %}
+          {% set error_msg = {"text": field_error} if field_error else {} %}
+
+          {# --- text --- #}
+          {% if field.type == "text" %}
+            {{ govukInput({
+              "id": field.id,
+              "name": field.id,
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "value": field_value | default("", true),
+              "errorMessage": error_msg if field_error else undefined
+            }) }}
+
+          {# --- textarea --- #}
+          {% elif field.type == "textarea" %}
+            {% set hint_parts = [] %}
+            {% if field.hint is defined and field.hint %}
+              {% set _ = hint_parts.append(field.hint) %}
+            {% endif %}
+            {% if field.word_limit is defined and field.word_limit %}
+              {% set _ = hint_parts.append("You can write up to " ~ field.word_limit ~ " words") %}
+            {% endif %}
+            {{ govukTextarea({
+              "id": field.id,
+              "name": field.id,
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": hint_parts | join(". ")} if hint_parts else {},
+              "value": field_value | default("", true),
+              "errorMessage": error_msg if field_error else undefined
+            }) }}
+
+          {# --- radio --- #}
+          {% elif field.type == "radio" %}
+            {% set radio_items = [] %}
+            {% for opt in field.options | default([]) %}
+              {% set _ = radio_items.append({
+                "value": opt.value,
+                "text": opt.label,
+                "checked": (field_value == opt.value) if field_value else false
+              }) %}
+            {% endfor %}
+            {{ govukRadios({
+              "idPrefix": field.id,
+              "name": field.id,
+              "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--m"}},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "items": radio_items,
+              "errorMessage": error_msg if field_error else undefined
+            }) }}
+
+          {# --- checkbox --- #}
+          {% elif field.type == "checkbox" %}
+            {% if field.options is defined and field.options %}
+              {# Multi-option checkboxes #}
+              {% set cb_items = [] %}
+              {% set checked_vals = field_value if field_value is iterable and field_value is not string else [] %}
+              {% for opt in field.options %}
+                {% set _ = cb_items.append({
+                  "value": opt.value,
+                  "text": opt.label,
+                  "checked": (opt.value in checked_vals)
+                }) %}
+              {% endfor %}
+              {{ govukCheckboxes({
+                "idPrefix": field.id,
+                "name": field.id,
+                "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--m"}},
+                "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+                "items": cb_items,
+                "errorMessage": error_msg if field_error else undefined
+              }) }}
+            {% else %}
+              {# Single declaration checkbox #}
+              {{ govukCheckboxes({
+                "idPrefix": field.id,
+                "name": field.id,
+                "items": [{
+                  "value": "true",
+                  "text": field.label,
+                  "checked": (field_value == "true" or field_value == true) if field_value else false
+                }],
+                "errorMessage": error_msg if field_error else undefined
+              }) }}
+            {% endif %}
+
+          {# --- select --- #}
+          {% elif field.type == "select" %}
+            {% set select_items = [{"value": "", "text": "Select an option", "selected": not field_value}] %}
+            {% for opt in field.options | default([]) %}
+              {% set _ = select_items.append({
+                "value": opt.value,
+                "text": opt.label,
+                "selected": (field_value == opt.value) if field_value else false
+              }) %}
+            {% endfor %}
+            {{ govukSelect({
+              "id": field.id,
+              "name": field.id,
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "items": select_items,
+              "errorMessage": error_msg if field_error else undefined
+            }) }}
+
+          {# --- number --- #}
+          {% elif field.type == "number" %}
+            {{ govukInput({
+              "id": field.id,
+              "name": field.id,
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "value": field_value | default("", true),
+              "inputmode": "numeric",
+              "spellcheck": false,
+              "errorMessage": error_msg if field_error else undefined
+            }) }}
+
+          {# --- currency --- #}
+          {% elif field.type == "currency" %}
+            {{ govukInput({
+              "id": field.id,
+              "name": field.id,
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "value": field_value | default("", true),
+              "inputmode": "numeric",
+              "spellcheck": false,
+              "prefix": {"text": "\u00a3"},
+              "errorMessage": error_msg if field_error else undefined
+            }) }}
+
+          {# --- date --- #}
+          {% elif field.type == "date" %}
+            {{ govukDateInput({
+              "id": field.id,
+              "namePrefix": field.id,
+              "fieldset": {"legend": {"text": field.label, "classes": "govuk-fieldset__legend--m"}},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "errorMessage": error_msg if field_error else undefined
+            }) }}
+
+          {# --- file --- #}
+          {% elif field.type == "file" %}
+            {{ govukFileUpload({
+              "id": field.id,
+              "name": field.id,
+              "label": {"text": field.label, "classes": "govuk-label--m"},
+              "hint": {"text": field.hint} if field.hint is defined and field.hint else {},
+              "errorMessage": error_msg if field_error else undefined
+            }) }}
+
+          {% endif %}
+        {% endfor %}
+
+        {# --- Save and continue button --- #}
+        {{ govukButton({
+          "text": "Save and continue"
+        }) }}
+      </form>
     </div>
   </div>
 {% endblock %}
