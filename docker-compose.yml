@@ -1,0 +1,56 @@
+# One command to stand up the grants platform:
+#
+#   docker compose up --build       # production-ish: gunicorn + persisted DB
+#   docker compose --profile dev up # dev mode: flask --debug + live reload
+#   docker compose down -v          # tear everything down including volumes
+#
+# Data lives in a named Docker volume so re-running `docker compose up` doesn't
+# wipe your seeded grant + applications. Run `docker compose run --rm web
+# python seed.py --reset` to reset.
+
+services:
+  web:
+    build: .
+    image: grants-platform:latest
+    container_name: grants-platform-web
+    ports:
+      - "8000:8000"
+    environment:
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-dev-secret-change-me}
+      DATABASE_URL: sqlite:////data/grants.db
+      UPLOAD_FOLDER: /data/uploads
+    volumes:
+      - grants-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz').read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    # Seed the DB on first boot if it's empty; harmless on subsequent boots.
+    command: >
+      sh -c "python seed.py && gunicorn --bind 0.0.0.0:8000 --workers 2 --access-logfile - wsgi:app"
+
+  # Dev profile: mount the source tree, run the Flask dev server with reload.
+  # Opt-in with `docker compose --profile dev up`.
+  web-dev:
+    profiles: ["dev"]
+    build: .
+    image: grants-platform:latest
+    container_name: grants-platform-web-dev
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_SECRET_KEY: dev-secret-change-me
+      FLASK_DEBUG: "1"
+      DATABASE_URL: sqlite:////data/grants.db
+      UPLOAD_FOLDER: /data/uploads
+    volumes:
+      - .:/app
+      - /app/.venv  # anonymous volume so the container's .venv isn't shadowed
+      - grants-data:/data
+    command: >
+      sh -c "python seed.py && flask --app wsgi run --host 0.0.0.0 --port 5000 --debug"
+
+volumes:
+  grants-data:
