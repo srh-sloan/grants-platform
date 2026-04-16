@@ -700,9 +700,55 @@ at the moment. Check back soon."
 Custom CSS that extends GOV.UK Frontend goes in `app/static/app.css` (Stream D
 owns it). Name classes with `app-` prefix to avoid collisions with `govuk-` classes.
 
+### AI code audit learnings (2026-04-16)
+
+- **Lazy imports for optional SDKs:** `import anthropic` at module level broke
+  the entire test suite. Always do lazy imports inside functions for optional
+  dependencies. The monitoring plan generator (PR #72) follows this correctly.
+- **Test hermeticity:** AI tests must mock env vars (`ANTHROPIC_API_KEY`) not
+  just the SDK client. Use `@patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})`.
+- **Seed data must match schema contracts:** `answers_json` must be
+  `{page_id: {field_id: value}}`, not a flat dict. Audit caught this in
+  `seed_demo_applications.py`.
+- **Don't write None to JSON columns:** Explicitly storing `None` for a key
+  vs. the key being absent are semantically different. Only preserve keys
+  with actual values when spreading scores_json.
+- **Guard Claude response structure:** Check `message.content` is non-empty
+  before indexing `[0].text`.
+
+### Production readiness audit (2026-04-16, PRs #89-91)
+
+Full codebase audit with 4 reviewer agents + 3 fixer agents. 26 issues fixed:
+
+- **`save_upload` uses flush, not commit.** Callers control the transaction.
+  If you add a new upload path, do NOT call `db.session.commit()` inside
+  `save_upload` — commit in the route after all validation passes.
+- **Eligibility rules support `"type": "present"`** for file fields. Use this
+  instead of `"equals": true` when the field is a file upload.
+- **`_get_or_create_assessment` uses `current_user.id`** — not the AI user.
+  The AI path in `assessor_ai.py` sets its own assessor_id separately.
+- **Unflagging restores status to SUBMITTED** if the application was in
+  UNDER_REVIEW. The previous behavior left it stuck.
+- **`has_auto_reject` only checks scored criteria** — unscored criteria are
+  skipped, not treated as zero.
+- **Template `html` params must escape variables** with `| e` filter. Never
+  concatenate user-controlled values (grant.name, org.name, email) into
+  `"html"` macro params without escaping.
+
+Remaining known items (not yet fixed):
+- No rate limiting on login (needs Flask-Limiter dependency)
+- Raw HTML form elements on assessor scoring pages (large rewrite needed)
+- Email/AI calls block the request thread (needs background task queue)
+- No test coverage for admin blueprint
+- Common Ground grant has no eligibility form
+- No status transition enforcement at model level
+
 ### Build status (2026-04-16 end of day)
 
 **Phases 0-4 complete.** All PLAN.md build items either merged or in PR #60.
+315 tests passing, 0 failures. The data-driven architecture proved out: adding
+Common Ground Award (P4.1) and Local Digital partnership schema (P4.4) required
+zero Python code changes.
 304 tests passing, zero failures; `anthropic` SDK pinned in `pyproject.toml`
 so the AI-assessor tests run green. The data-driven architecture proved out:
 adding Common Ground Award (P4.1) and Local Digital partnership schema (P4.4)
