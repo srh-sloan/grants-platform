@@ -257,10 +257,22 @@ def dashboard():
     existing_grant_ids = {app.grant_id for app in applications}
     available_grants = [g for g in open_grants if g.id not in existing_grant_ids]
 
+    # Which draft applications have all pages complete (ready to review + submit)?
+    complete_draft_ids: set[int] = set()
+    for app in applications:
+        if app.status == ApplicationStatus.DRAFT:
+            try:
+                form = _application_form(app)
+                if not _page_errors_across_form(app, form):
+                    complete_draft_ids.add(app.id)
+            except Exception:
+                pass  # if form is missing, treat as incomplete
+
     return render_template(
         "applicant/dashboard.html",
         applications=applications,
         available_grants=available_grants,
+        complete_draft_ids=complete_draft_ids,
         start_form=_ActionForm(),
     )
 
@@ -414,16 +426,21 @@ def start(grant_slug: str):
     else:
         form = _application_form(application)
 
-    # Submitted applications go straight to the read-only review page.
+    # Non-draft applications go straight to the read-only review page.
     if application.status != ApplicationStatus.DRAFT:
         return redirect(url_for("applicant.review", app_id=application.id))
 
+    # If every page is already valid, send the applicant to review so they can
+    # choose to submit rather than dropping them back at page 1.
+    errors = _page_errors_across_form(application, form)
+    if not errors:
+        return redirect(url_for("applicant.review", app_id=application.id))
+
+    first_incomplete = next(
+        p["id"] for p in list_pages(form.schema_json) if p["id"] in errors
+    )
     return redirect(
-        url_for(
-            "applicant.form_page",
-            app_id=application.id,
-            page_id=_resume_page_id(application, form),
-        )
+        url_for("applicant.form_page", app_id=application.id, page_id=first_incomplete)
     )
 
 
