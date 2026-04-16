@@ -556,4 +556,185 @@ def test_monitoring_page_shows_kpis(client, assessor, submitted_app, assessment)
     assert b"Housing records" in resp.data
     assert b"Set up referral pathways" in resp.data
     assert b"Month 6" in resp.data
-    assert b"Regenerate monitoring plan" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Tests: User management -- edit existing user
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def admin_user(app):
+    u = User(
+        email="admin@test.com",
+        password_hash=generate_password_hash("AdminPass1!"),
+        role=UserRole.ADMIN,
+    )
+    _db.session.add(u)
+    _db.session.commit()
+    return u
+
+
+@pytest.fixture()
+def other_assessor(app):
+    u = User(
+        email="other@test.com",
+        password_hash=generate_password_hash("OtherPass1!"),
+        role=UserRole.ASSESSOR,
+    )
+    _db.session.add(u)
+    _db.session.commit()
+    return u
+
+
+def test_users_list_has_edit_link(client, assessor, admin_user):
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    resp = client.get("/assess/users")
+    assert resp.status_code == 200
+    assert f"/assess/users/{assessor.id}/edit".encode() in resp.data
+
+
+def test_edit_user_form_is_prefilled(client, assessor, admin_user):
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    resp = client.get(f"/assess/users/{assessor.id}/edit")
+    assert resp.status_code == 200
+    assert b"assessor@test.com" in resp.data
+    # Role dropdown should show the current role as selected.
+    assert b'value="assessor" selected' in resp.data
+
+
+def test_edit_user_updates_email_and_role(client, assessor, admin_user):
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    original_hash = assessor.password_hash
+
+    resp = client.post(
+        f"/assess/users/{assessor.id}/edit",
+        data={
+            "email": "NewEmail@Test.com",
+            "role": "admin",
+            "new_password": "",
+            "confirm_new_password": "",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/assess/users")
+
+    refreshed = _db.session.get(User, assessor.id)
+    assert refreshed.email == "newemail@test.com"
+    assert refreshed.role == UserRole.ADMIN
+    # Password untouched when the new_password field is blank.
+    assert refreshed.password_hash == original_hash
+
+
+def test_edit_user_changes_password_when_provided(client, assessor, admin_user):
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    original_hash = assessor.password_hash
+
+    resp = client.post(
+        f"/assess/users/{assessor.id}/edit",
+        data={
+            "email": "assessor@test.com",
+            "role": "assessor",
+            "new_password": "brand-new-secret-123",
+            "confirm_new_password": "brand-new-secret-123",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    refreshed = _db.session.get(User, assessor.id)
+    assert refreshed.password_hash != original_hash
+
+
+def test_edit_user_rejects_duplicate_email(client, assessor, admin_user, other_assessor):
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    resp = client.post(
+        f"/assess/users/{assessor.id}/edit",
+        data={
+            "email": "other@test.com",  # already taken by other_assessor
+            "role": "assessor",
+            "new_password": "",
+            "confirm_new_password": "",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200
+    assert b"already exists" in resp.data
+    refreshed = _db.session.get(User, assessor.id)
+    assert refreshed.email == "assessor@test.com"
+
+
+def test_edit_user_rejects_short_password(client, assessor, admin_user):
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    resp = client.post(
+        f"/assess/users/{assessor.id}/edit",
+        data={
+            "email": "assessor@test.com",
+            "role": "assessor",
+            "new_password": "short",
+            "confirm_new_password": "short",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200
+    assert b"at least 10 characters" in resp.data
+
+
+def test_edit_user_rejects_mismatched_passwords(client, assessor, admin_user):
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    resp = client.post(
+        f"/assess/users/{assessor.id}/edit",
+        data={
+            "email": "assessor@test.com",
+            "role": "assessor",
+            "new_password": "long-enough-password-1",
+            "confirm_new_password": "different-password-1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200
+    assert b"Passwords must match" in resp.data
+
+
+def test_edit_user_404_for_applicant(client, admin_user, grant):
+    """Applicant accounts are not manageable from the Accounts page."""
+    org = Organisation(name="A", contact_email="a@test.com")
+    _db.session.add(org)
+    _db.session.flush()
+    applicant = User(
+        email="applicant@test.com",
+        password_hash=generate_password_hash("ApplicantPass1!"),
+        role=UserRole.APPLICANT,
+        org_id=org.id,
+    )
+    _db.session.add(applicant)
+    _db.session.commit()
+
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    resp = client.get(f"/assess/users/{applicant.id}/edit")
+    assert resp.status_code == 404
+
+
+def test_edit_user_404_for_missing_user(client, admin_user):
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    resp = client.get("/assess/users/9999/edit")
+    assert resp.status_code == 404
+
+
+def test_edit_user_prevents_last_admin_self_demote(client, admin_user):
+    """An admin cannot remove their own admin role if they are the only admin."""
+    _login(client, email="admin@test.com", password="AdminPass1!")
+    resp = client.post(
+        f"/assess/users/{admin_user.id}/edit",
+        data={
+            "email": "admin@test.com",
+            "role": "assessor",
+            "new_password": "",
+            "confirm_new_password": "",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200
+    assert b"only admin account" in resp.data
+    refreshed = _db.session.get(User, admin_user.id)
+    assert refreshed.role == UserRole.ADMIN

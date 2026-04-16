@@ -6,17 +6,19 @@ URL prefix: ``/assess``.
 
 Routes
 ------
-GET  /assess/                     -- application queue (filterable)
-GET  /assess/<app_id>             -- detail: answers + AI assessment + scoring form
-POST /assess/<app_id>/score       -- save manual scores
-POST /assess/<app_id>/flag        -- flag for moderation review
-POST /assess/<app_id>/decision    -- record final decision + notify applicant
-GET  /assess/<app_id>/monitoring  -- monitoring plan view
-POST /assess/<app_id>/monitoring  -- generate monitoring plan via AI
-GET  /assess/allocation           -- ranked allocation dashboard
-GET  /assess/users                -- list assessor/admin users (admin only)
-GET  /assess/users/new            -- form to create a new assessor account (admin only)
-POST /assess/users/new            -- create the assessor account
+GET  /assess/                         -- application queue (filterable)
+GET  /assess/<app_id>                 -- detail: answers + AI assessment + scoring form
+POST /assess/<app_id>/score           -- save manual scores
+POST /assess/<app_id>/flag            -- flag for moderation review
+POST /assess/<app_id>/decision        -- record final decision + notify applicant
+GET  /assess/<app_id>/monitoring      -- monitoring plan view
+POST /assess/<app_id>/monitoring      -- generate monitoring plan via AI
+GET  /assess/allocation               -- ranked allocation dashboard
+GET  /assess/users                    -- list assessor/admin users (admin only)
+GET  /assess/users/new                -- form to create a new assessor account (admin only)
+POST /assess/users/new                -- create the assessor account
+GET  /assess/users/<user_id>/edit     -- form to edit an existing account (admin only)
+POST /assess/users/<user_id>/edit     -- save edits to the account
 """
 
 from __future__ import annotations
@@ -121,6 +123,69 @@ class CreateAssessorForm(FlaskForm):
         ).scalar_one_or_none()
         if existing is not None:
             raise ValidationError("An account with this email already exists")
+
+
+class EditUserForm(FlaskForm):
+    """Form for an admin to edit an existing assessor or admin account.
+
+    Password fields are optional on edit -- leave blank to keep the current
+    password. When a new password is supplied it must meet the same minimum
+    length requirement as account creation and match the confirmation field.
+    """
+
+    email = StringField(
+        "Email address",
+        validators=[
+            InputRequired(message="Enter an email address"),
+            Length(max=255),
+            Regexp(_EMAIL_REGEX, message=_EMAIL_MESSAGE),
+        ],
+    )
+    role = SelectField(
+        "Role",
+        choices=[
+            (UserRole.ASSESSOR.value, "Assessor"),
+            (UserRole.ADMIN.value, "Admin"),
+        ],
+        validators=[InputRequired()],
+    )
+    new_password = PasswordField(
+        "New password",
+        validators=[],
+    )
+    confirm_new_password = PasswordField(
+        "Confirm new password",
+        validators=[
+            EqualTo("new_password", message="Passwords must match"),
+        ],
+    )
+    submit = SubmitField("Save changes")
+
+    def __init__(self, *args, user_id: int | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._user_id = user_id
+
+    def validate_email(self, field: StringField) -> None:
+        email = (field.data or "").strip().lower()
+        if not email:
+            return
+        stmt = select(User).where(User.email == email)
+        if self._user_id is not None:
+            stmt = stmt.where(User.id != self._user_id)
+        existing = db.session.execute(stmt).scalar_one_or_none()
+        if existing is not None:
+            raise ValidationError("An account with this email already exists")
+
+    def validate_new_password(self, field: PasswordField) -> None:
+        value = field.data or ""
+        if not value:
+            return
+        if len(value) < _PASSWORD_MIN_LENGTH:
+            raise ValidationError(
+                f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"
+            )
+        if len(value) > 128:
+            raise ValidationError("Password must be 128 characters or fewer")
 
 
 # ---------------------------------------------------------------------------
@@ -853,3 +918,44 @@ def create_user():
         flash("Account created for {}.".format(email), "success")
         return redirect(url_for("assessor.list_users"))
     return render_template("assessor/create_user.html", form=form)
+
+
+@bp.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
+@assessor_required
+def edit_user(user_id: int):
+    user = db.session.get(User, user_id)
+    # Only assessor/admin accounts are managed from this surface -- the
+    # accounts page intentionally excludes applicants.
+    if user is None or user.role not in (UserRole.ASSESSOR, UserRole.ADMIN):
+        abort(404)
+
+    form = EditUserForm(user_id=user.id)
+    if request.method == "GET":
+        form.email.data = user.email
+        form.role.data = user.role.value
+
+    if form.validate_on_submit():
+        new_email = (form.email.data or "").strip().lower()
+        new_role = UserRole(form.role.data)
+
+        # Guard against an admin demoting themselves and losing access to
+        # this page before another admin exists.
+        if user.id == current_user.id and new_role != UserRole.ADMIN and user.is_admin:
+            other_admin = db.session.execute(
+                select(User).where(User.role == UserRole.ADMIN, User.id != user.id)
+            ).scalar_one_or_none()
+            if other_admin is None:
+                form.role.errors = list(form.role.errors) + [
+                    "You cannot remove admin from the only admin account."
+                ]
+                return render_template("assessor/edit_user.html", form=form, user=user)
+
+        user.email = new_email
+        user.role = new_role
+        if form.new_password.data:
+            user.password_hash = generate_password_hash(form.new_password.data)
+        db.session.commit()
+        flash(f"Account updated for {new_email}.", "success")
+        return redirect(url_for("assessor.list_users"))
+
+    return render_template("assessor/edit_user.html", form=form, user=user)
