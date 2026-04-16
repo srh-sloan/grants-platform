@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from 'govuk_frontend_jinja/components/inset-text/macro.html' import govukInsetText %}
+
+{% block title %}Edit account{% endblock %}
+
+{% block content %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+
+    <a class="govuk-back-link" href="{{ url_for('assessor.list_users') }}">Back to user management</a>
+
+    <h1 class="govuk-heading-xl govuk-!-margin-top-4">Edit account</h1>
+
+    <p class="govuk-body">
+      Update the account details for <strong>{{ user.email }}</strong>. Leave the
+      password fields blank to keep the existing password.
+    </p>
+
+    {{ govukInsetText({
+      "text": "The account holder will not receive an automated email about these changes. Share any new password with them securely."
+    }) }}
+
+    {% if form.errors %}
+      <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+          <h2 class="govuk-error-summary__title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              {% for field, errors in form.errors.items() %}
+                {% for error in errors %}
+                  <li><a href="#{{ field }}">{{ error }}</a></li>
+                {% endfor %}
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+
+      <div class="govuk-form-group {% if form.email.errors %}govuk-form-group--error{% endif %}">
+        <label class="govuk-label govuk-label--s" for="email">Email address</label>
+        {% for error in form.email.errors %}
+          <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> {{ error }}</p>
+        {% endfor %}
+        <input class="govuk-input {% if form.email.errors %}govuk-input--error{% endif %}"
+               id="email" name="email" type="email" autocomplete="email"
+               value="{{ form.email.data or '' }}">
+      </div>
+
+      <div class="govuk-form-group {% if form.role.errors %}govuk-form-group--error{% endif %}">
+        <label class="govuk-label govuk-label--s" for="role">Role</label>
+        {% for error in form.role.errors %}
+          <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> {{ error }}</p>
+        {% endfor %}
+        <select class="govuk-select" id="role" name="role">
+          {% for value, label in form.role.choices %}
+            <option value="{{ value }}" {% if form.role.data == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="govuk-form-group {% if form.new_password.errors %}govuk-form-group--error{% endif %}">
+        <label class="govuk-label govuk-label--s" for="new_password">New password</label>
+        <div class="govuk-hint">Leave blank to keep the current password. If set, must be at least 10 characters.</div>
+        {% for error in form.new_password.errors %}
+          <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> {{ error }}</p>
+        {% endfor %}
+        <input class="govuk-input {% if form.new_password.errors %}govuk-input--error{% endif %}"
+               id="new_password" name="new_password" type="password" autocomplete="new-password">
+      </div>
+
+      <div class="govuk-form-group {% if form.confirm_new_password.errors %}govuk-form-group--error{% endif %}">
+        <label class="govuk-label govuk-label--s" for="confirm_new_password">Confirm new password</label>
+        {% for error in form.confirm_new_password.errors %}
+          <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> {{ error }}</p>
+        {% endfor %}
+        <input class="govuk-input {% if form.confirm_new_password.errors %}govuk-input--error{% endif %}"
+               id="confirm_new_password" name="confirm_new_password" type="password" autocomplete="new-password">
+      </div>
+
+      <button class="govuk-button" type="submit">Save changes</button>
+      <a class="govuk-link govuk-!-margin-left-4" href="{{ url_for('assessor.list_users') }}">Cancel</a>
+
+    </form>
+  </div>
+</div>
+{% endblock %}
