@@ -18,10 +18,11 @@ import sys
 from pathlib import Path
 
 from sqlalchemy import select
+from werkzeug.security import generate_password_hash
 
 from app import create_app
 from app.extensions import db
-from app.models import Form, FormKind, Grant, GrantStatus
+from app.models import Form, FormKind, Grant, GrantStatus, Organisation, User, UserRole
 
 GRANTS_DIR = Path(__file__).resolve().parent / "seed" / "grants"
 FORMS_DIR = Path(__file__).resolve().parent / "app" / "forms"
@@ -93,6 +94,70 @@ def upsert_form(grant: Grant, form_id: str) -> Form:
     return form
 
 
+# Demo credentials printed to stdout on seed so they are easy to find.
+_DEMO_USERS = [
+    {
+        "email": "assessor@ehcf.test",
+        "password": "Assessor123!",
+        "role": UserRole.ASSESSOR,
+        "org_name": None,
+    },
+    {
+        "email": "admin@ehcf.test",
+        "password": "Admin1234567!",
+        "role": UserRole.ADMIN,
+        "org_name": None,
+    },
+    {
+        "email": "applicant@ehcf.test",
+        "password": "Applicant123!",
+        "role": UserRole.APPLICANT,
+        "org_name": "Demo Organisation",
+    },
+]
+
+
+def seed_demo_users() -> None:
+    """Upsert demo users for local development and judging demos.
+
+    Credentials are printed to stdout. These accounts must never be used in
+    production -- they exist solely to make the demo runnable without manual
+    DB manipulation.
+    """
+    print("\nDemo user accounts:")
+    print("-" * 50)
+
+    for spec in _DEMO_USERS:
+        existing = db.session.execute(
+            select(User).where(User.email == spec["email"])
+        ).scalar_one_or_none()
+
+        if existing is not None:
+            print(f"  {spec['role'].value:<12} {spec['email']}  (already exists)")
+            continue
+
+        org_id = None
+        if spec["org_name"]:
+            org = Organisation(
+                name=spec["org_name"],
+                contact_email=spec["email"],
+            )
+            db.session.add(org)
+            db.session.flush()
+            org_id = org.id
+
+        user = User(
+            email=spec["email"],
+            password_hash=generate_password_hash(spec["password"]),
+            role=spec["role"],
+            org_id=org_id,
+        )
+        db.session.add(user)
+        print(f"  {spec['role'].value:<12} {spec['email']}  password: {spec['password']}")
+
+    print("-" * 50)
+
+
 def seed_into_session(reset: bool = False) -> None:
     """Populate the current session's DB. Requires an active app context."""
     if reset:
@@ -113,6 +178,7 @@ def seed_into_session(reset: bool = False) -> None:
             upsert_form(grant, form_id)
         print(f"Seeded grant: {config['slug']} ({config['name']})")
 
+    seed_demo_users()
     db.session.commit()
 
 

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% from 'govuk_frontend_jinja/components/tag/macro.html' import govukTag %}
+{% from 'govuk_frontend_jinja/components/button/macro.html' import govukButton %}
+
+{% block title %}User management{% endblock %}
+
+{% block content %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+
+    <a class="govuk-back-link" href="{{ url_for('assessor.queue') }}">Back to queue</a>
+
+    <h1 class="govuk-heading-xl govuk-!-margin-top-4">Assessor accounts</h1>
+
+    <p class="govuk-body">
+      <a class="govuk-button" href="{{ url_for('assessor.create_user') }}">Create new account</a>
+    </p>
+
+    {% if users %}
+      <table class="govuk-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th class="govuk-table__header">Email</th>
+            <th class="govuk-table__header">Role</th>
+            <th class="govuk-table__header">Created</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          {% for user in users %}
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">{{ user.email }}</td>
+              <td class="govuk-table__cell">
+                {% if user.role.value == "admin" %}
+                  {{ govukTag({"text": "Admin", "classes": "govuk-tag--purple"}) }}
+                {% else %}
+                  {{ govukTag({"text": "Assessor", "classes": "govuk-tag--blue"}) }}
+                {% endif %}
+              </td>
+              <td class="govuk-table__cell">
+                {{ user.created_at.strftime("%d %b %Y") if user.created_at else "—" }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="govuk-body govuk-hint">No assessor or admin accounts yet.</p>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

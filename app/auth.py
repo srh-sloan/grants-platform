@@ -75,7 +75,7 @@ def load_user(user_id: str) -> User | None:
 # ---------------------------------------------------------------------------
 
 
-def _role_required(role: UserRole) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def _role_required(*roles: UserRole) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def decorator(view: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(view)
         def wrapped(*args, **kwargs):
@@ -83,7 +83,7 @@ def _role_required(role: UserRole) -> Callable[[Callable[..., Any]], Callable[..
                 # Defer to Flask-Login's unauthorised handler so ``next=`` is
                 # preserved and the redirect respects login_manager.login_view.
                 return login_manager.unauthorized()
-            if current_user.role != role:
+            if current_user.role not in roles:
                 abort(403)
             return view(*args, **kwargs)
 
@@ -93,7 +93,8 @@ def _role_required(role: UserRole) -> Callable[[Callable[..., Any]], Callable[..
 
 
 applicant_required = _role_required(UserRole.APPLICANT)
-assessor_required = _role_required(UserRole.ASSESSOR)
+# Admins can access the assessor area (they land there after login).
+assessor_required = _role_required(UserRole.ASSESSOR, UserRole.ADMIN)
 
 
 # ---------------------------------------------------------------------------

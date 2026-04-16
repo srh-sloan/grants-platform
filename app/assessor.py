@@ -1,4 +1,4 @@
-"""Assessor routes: queue, application detail, scoring, decision, allocation.
+"""Assessor routes: queue, application detail, scoring, decision, allocation, user management.
 
 **Stream ownership:** Assessor & scoring (Stream C).
 
@@ -12,6 +12,9 @@ POST /assess/<app_id>/score       -- save manual scores
 POST /assess/<app_id>/flag        -- flag for moderation review
 POST /assess/<app_id>/decision    -- record final decision + notify applicant
 GET  /assess/allocation           -- ranked allocation dashboard
+GET  /assess/users                -- list assessor/admin users (admin only)
+GET  /assess/users/new            -- form to create a new assessor account (admin only)
+POST /assess/users/new            -- create the assessor account
 """
 
 from __future__ import annotations
@@ -24,8 +27,12 @@ from datetime import UTC, datetime
 from email.mime.text import MIMEText
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask_login import current_user
 from flask_wtf import FlaskForm
 from sqlalchemy import select
+from werkzeug.security import generate_password_hash
+from wtforms import PasswordField, SelectField, StringField, SubmitField
+from wtforms.validators import EqualTo, InputRequired, Length, Regexp, ValidationError
 
 from app.auth import assessor_required
 from app.extensions import db
@@ -34,6 +41,9 @@ from app.models import (
     ApplicationStatus,
     Assessment,
     AssessmentRecommendation,
+    Organisation,
+    User,
+    UserRole,
 )
 from app.scoring import calculate_weighted_score, has_auto_reject, max_weighted_total
 
@@ -41,9 +51,13 @@ log = logging.getLogger(__name__)
 
 bp = Blueprint("assessor", __name__, url_prefix="/assess")
 
+_EMAIL_REGEX = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+_EMAIL_MESSAGE = "Enter an email address in the correct format, like name@example.com"
+_PASSWORD_MIN_LENGTH = 10
+
 
 # ---------------------------------------------------------------------------
-# Tiny CSRF-bearing forms (fields rendered manually in templates)
+# Forms
 # ---------------------------------------------------------------------------
 
 
@@ -51,8 +65,66 @@ class _CsrfForm(FlaskForm):
     """No fields -- used only for the hidden CSRF token on POST buttons."""
 
 
+class CreateAssessorForm(FlaskForm):
+    """Form for an admin to create a new assessor or admin account."""
+
+    email = StringField(
+        "Email address",
+        validators=[
+            InputRequired(message="Enter an email address"),
+            Length(max=255),
+            Regexp(_EMAIL_REGEX, message=_EMAIL_MESSAGE),
+        ],
+    )
+    role = SelectField(
+        "Role",
+        choices=[
+            (UserRole.ASSESSOR.value, "Assessor"),
+            (UserRole.ADMIN.value, "Admin"),
+        ],
+        validators=[InputRequired()],
+    )
+    password = PasswordField(
+        "Password",
+        validators=[
+            InputRequired(message="Enter a password"),
+            Length(min=_PASSWORD_MIN_LENGTH, max=128,
+                   message=f"Password must be at least {_PASSWORD_MIN_LENGTH} characters"),
+        ],
+    )
+    confirm_password = PasswordField(
+        "Confirm password",
+        validators=[
+            InputRequired(message="Confirm the password"),
+            EqualTo("password", message="Passwords must match"),
+        ],
+    )
+    submit = SubmitField("Create account")
+
+    def validate_email(self, field: StringField) -> None:
+        email = (field.data or "").strip().lower()
+        if not email:
+            return
+        existing = db.session.execute(
+            select(User).where(User.email == email)
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise ValidationError("An account with this email already exists")
+
+
 # ---------------------------------------------------------------------------
-# Helpers
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+
+def _admin_required():
+    """Abort with 403 if the current user is not an admin."""
+    if not current_user.is_admin:
+        abort(403)
+
+
+# ---------------------------------------------------------------------------
+# Application helpers
 # ---------------------------------------------------------------------------
 
 
@@ -64,11 +136,9 @@ def _get_application_or_404(app_id: int) -> Application:
 
 
 def _get_or_create_assessment(application: Application) -> Assessment:
-    """Return the existing assessment, or create a bare one for manual scoring."""
     assessment = Assessment.query.filter_by(application_id=application.id).first()
     if assessment is None:
         from app.assessor_ai import _get_or_create_ai_user
-
         ai_user = _get_or_create_ai_user()
         assessment = Assessment(
             application_id=application.id,
@@ -127,10 +197,11 @@ def _notify_applicant(
         rec_label=rec_label,
         notes_section=(
             "Additional information from the assessment panel:\n\n    " + decision_notes
-            if decision_notes
-            else ""
+            if decision_notes else ""
         ),
-        contact_email=application.grant.config_json.get("contact_email", "grants@communities.gov.uk"),
+        contact_email=application.grant.config_json.get(
+            "contact_email", "grants@communities.gov.uk"
+        ),
     )
 
     msg = MIMEText(body, "plain", "utf-8")
@@ -158,14 +229,13 @@ def _notify_applicant(
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Application queue + detail
 # ---------------------------------------------------------------------------
 
 
 @bp.get("/")
 @assessor_required
 def queue():
-    """Application queue -- all non-draft applications with optional filters."""
     status_filter = request.args.get("status", "")
     rec_filter = request.args.get("recommendation", "")
 
@@ -181,8 +251,7 @@ def queue():
         rows = [(a, s) for a, s in rows if a.status.value == status_filter]
     if rec_filter:
         rows = [
-            (a, s)
-            for a, s in rows
+            (a, s) for a, s in rows
             if s and s.recommendation and s.recommendation.value == rec_filter
         ]
 
@@ -197,7 +266,6 @@ def queue():
 @bp.get("/<int:app_id>")
 @assessor_required
 def application_detail(app_id: int):
-    """Detail view: applicant answers, AI assessment, manual scoring form, decision."""
     application = _get_application_or_404(app_id)
     assessment = Assessment.query.filter_by(application_id=app_id).first()
     criteria = application.grant.config_json.get("criteria", [])
@@ -216,7 +284,6 @@ def application_detail(app_id: int):
 @bp.post("/<int:app_id>/score")
 @assessor_required
 def save_score(app_id: int):
-    """Save manual assessor scores for each criterion."""
     application = _get_application_or_404(app_id)
     form = _CsrfForm()
     if not form.validate_on_submit():
@@ -279,7 +346,6 @@ def save_score(app_id: int):
 @bp.post("/<int:app_id>/flag")
 @assessor_required
 def flag_for_moderation(app_id: int):
-    """Toggle the moderation flag on an assessment."""
     application = _get_application_or_404(app_id)
     form = _CsrfForm()
     if not form.validate_on_submit():
@@ -290,7 +356,6 @@ def flag_for_moderation(app_id: int):
     currently_flagged = bool(notes.get("_flagged"))
     notes["_flagged"] = not currently_flagged
     assessment.notes_json = notes
-    db.session.commit()
 
     if notes["_flagged"]:
         flash("Application flagged for moderation.", "warning")
@@ -305,7 +370,6 @@ def flag_for_moderation(app_id: int):
 @bp.post("/<int:app_id>/decision")
 @assessor_required
 def record_decision(app_id: int):
-    """Record a final funding decision and notify the applicant by email."""
     application = _get_application_or_404(app_id)
     form = _CsrfForm()
     if not form.validate_on_submit():
@@ -324,7 +388,6 @@ def record_decision(app_id: int):
         flash("Decision notes are required.", "error")
         return redirect(url_for("assessor.application_detail", app_id=app_id))
 
-    # Update application status
     application.status = {
         AssessmentRecommendation.FUND: ApplicationStatus.APPROVED,
         AssessmentRecommendation.REJECT: ApplicationStatus.REJECTED,
@@ -338,17 +401,20 @@ def record_decision(app_id: int):
     assessment.completed_at = datetime.now(UTC)
 
     db.session.commit()
-
     _notify_applicant(application, recommendation, decision_notes)
 
     flash("Decision recorded and applicant notified.", "success")
     return redirect(url_for("assessor.application_detail", app_id=app_id))
 
 
+# ---------------------------------------------------------------------------
+# Allocation dashboard
+# ---------------------------------------------------------------------------
+
+
 @bp.get("/allocation")
 @assessor_required
 def allocation():
-    """Ranked allocation dashboard: all assessed applications sorted by score."""
     stmt = (
         select(Application, Assessment)
         .join(Assessment, Assessment.application_id == Application.id)
@@ -367,3 +433,40 @@ def allocation():
         rows=rows,
         total_budget=total_budget,
     )
+
+
+# ---------------------------------------------------------------------------
+# User management (admin only)
+# ---------------------------------------------------------------------------
+
+
+@bp.get("/users")
+@assessor_required
+def list_users():
+    _admin_required()
+    users = db.session.execute(
+        select(User).where(
+            User.role.in_([UserRole.ASSESSOR, UserRole.ADMIN])
+        ).order_by(User.role, User.email)
+    ).scalars().all()
+    form = _CsrfForm()
+    return render_template("assessor/users.html", users=users, form=form)
+
+
+@bp.route("/users/new", methods=["GET", "POST"])
+@assessor_required
+def create_user():
+    _admin_required()
+    form = CreateAssessorForm()
+    if form.validate_on_submit():
+        email = (form.email.data or "").strip().lower()
+        user = User(
+            email=email,
+            password_hash=generate_password_hash(form.password.data or ""),
+            role=UserRole(form.role.data),
+        )
+        db.session.add(user)
+        db.session.commit()
+        flash("Account created for {}.".format(email), "success")
+        return redirect(url_for("assessor.list_users"))
+    return render_template("assessor/create_user.html", form=form)
