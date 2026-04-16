@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% from 'govuk_frontend_jinja/components/tag/macro.html' import govukTag %}
+{% from 'govuk_frontend_jinja/components/warning-text/macro.html' import govukWarningText %}
+{% from 'govuk_frontend_jinja/components/inset-text/macro.html' import govukInsetText %}
+{% from 'govuk_frontend_jinja/components/table/macro.html' import govukTable %}
+{% from 'govuk_frontend_jinja/components/summary-list/macro.html' import govukSummaryList %}
+
+{% block title %}About GrantOS{% endblock %}
+
+{% block content %}
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {# ── 1. What GrantOS is and the problem it solves ── #}
+      <h1 class="govuk-heading-xl">About GrantOS</h1>
+      <p class="govuk-body-l">
+        GrantOS is a reusable government grants platform. It guides applicants through complex fund requirements, helps assessors triage consistently at volume, and generates draft monitoring plans after award — powered by AI that supports human judgement rather than replacing it.
+      </p>
+
+      <h2 class="govuk-heading-l">The problem</h2>
+      <p class="govuk-body">
+        Applying for a government grant is one of the hardest administrative tasks a small charity faces. Assessing those applications at volume is equally painful for the officials who receive them. GrantOS addresses both through one connected platform.
+      </p>
+
+      <h3 class="govuk-heading-m">For applicants</h3>
+      <p class="govuk-body">
+        A small VCFS organisation — income under £5m, 3+ years' delivery — but no dedicated bid writer. They must interpret a ten-section prospectus, check eligibility across six interlocking conditions, write to seven weighted criteria, and secure a signed endorsement letter from the right local authority officer. All within a five-week window, alongside managing a frontline service.
+      </p>
+      {{ govukInsetText({
+        "text": "Good projects get rejected because the application was not written well — not because the work was not fundable."
+      }) }}
+
+      <h3 class="govuk-heading-m">For assessors</h3>
+      <p class="govuk-body">
+        The VCS team in MHCLG's Homelessness and Rough Sleeping Directorate must cross-reference free-text narrative against seven criteria and calculate weighted scores manually across many applications. No consistent view of evidence found versus evidence missing per criterion. Borderline applications require moderation — adding coordination overhead to an already compressed April-to-June timeline.
+      </p>
+      {{ govukInsetText({
+        "text": "Time spent on data wrangling is time not spent on the human judgement that actually matters in a funding decision."
+      }) }}
+
+      <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible">
+
+      {# ── 2. The five platform surfaces ── #}
+      <h2 class="govuk-heading-l">Five platform surfaces</h2>
+      <p class="govuk-body">
+        GrantOS is not a bespoke EHCF tool. It is a grant-agnostic platform: eligibility rules, criteria, weights, and form fields all live in JSON configuration, not in Python. Adding a second grant means editing a data file — not rewriting the application.
+      </p>
+
+      <ol class="govuk-list govuk-list--number">
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Grant Builder</span>
+            {{ govukTag({"text": "Admin", "classes": "govuk-tag--grey"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Department staff design a fund round — objectives, eligibility rules, criteria, weights, document requirements. No code required.
+          </p>
+        </li>
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Applicant Workspace</span>
+            {{ govukTag({"text": "Applicant", "classes": "govuk-tag--blue"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Guided, multi-page form with eligibility pre-check, save and return, document uploads, AI-suggested draft answers, and a task-list checklist before submit.
+          </p>
+        </li>
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Assessor Workbench</span>
+            {{ govukTag({"text": "Assessor", "classes": "govuk-tag--yellow"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Application queue with filters, side-by-side answers and scoring form, AI-assisted criterion scores with evidence snippets, override capability, and allocation dashboard.
+          </p>
+        </li>
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Monitoring Generator</span>
+            {{ govukTag({"text": "Grant team", "classes": "govuk-tag--yellow"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Approved applications get a draft KPI pack: outputs, outcomes, baselines, reporting cadence, evidence types, milestone table. Human reviews before confirming.
+          </p>
+        </li>
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Portfolio Dashboard</span>
+            {{ govukTag({"text": "Leadership", "classes": "govuk-tag--grey"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Director view across all active funds: application pipeline, assessor workload, missing-document count, 0-score risk flags, average turnaround.
+          </p>
+        </li>
+      </ol>
+
+      <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible">
+
+      {# ── 3. EHCF grant context ── #}
+      <h2 class="govuk-heading-l">First grant modelled: EHCF</h2>
+      <p class="govuk-body">
+        The Ending Homelessness in Communities Fund (EHCF) is administered by MHCLG. GrantOS uses it as the first grant to prove out the data-driven approach.
+      </p>
+
+      {{ govukSummaryList({
+        "rows": [
+          {"key": {"text": "Fund size"}, "value": {"text": "£37 million over 3 years (2026–2029)"}},
+          {"key": {"text": "Application window"}, "value": {"text": "5 weeks, 36 days (23 Feb to 31 Mar 2026)"}},
+          {"key": {"text": "Award range (revenue)"}, "value": {"text": "£50,000 – £200,000 per year"}},
+          {"key": {"text": "Award range (capital)"}, "value": {"text": "£50,000 – £200,000 (year 1 or 2 only)"}},
+          {"key": {"text": "Assessed criteria"}, "value": {"text": "7 weighted criteria, config-driven"}},
+          {"key": {"text": "Hard gate"}, "value": {"text": "Any criterion scoring 0 = automatic rejection"}}
+        ]
+      }) }}
+
+      <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible">
+
+      {# ── 4. The AI layer ── #}
+      <h2 class="govuk-heading-l">AI layer</h2>
+      <p class="govuk-body">
+        Every AI feature in GrantOS surfaces information, suggests content, and highlights risk. Every output is reviewed and confirmed by a human before it becomes part of the record.
+      </p>
+
+      {{ govukInsetText({
+        "html": "<strong>AI does not auto-approve, auto-reject, or auto-submit anything.</strong> AI output is always labelled as provisional. The system records when an assessor overrides a score, preserving the AI's suggestion alongside the human's decision for audit."
+      }) }}
+
+      <h3 class="govuk-heading-s">1. Pre-fill — draft answers from your own documents</h3>
+      <p class="govuk-body">
+        The applicant uploads their annual report, project plan, budget, or LA letter. The AI reads the grant's form schema and suggests answers for each field with a clear label showing which source document the suggestion came from. The applicant edits, confirms, and owns every word before submission.
+      </p>
+
+      <h3 class="govuk-heading-s">2. Scoring triage — provisional criterion scores with evidence</h3>
+      <p class="govuk-body">
+        After submission, the AI reads the application against the grant's scoring rubric — all criteria and weights from the config JSON, not hardcoded. It returns a provisional score (0–3) per criterion, confidence level, evidence found, evidence missing, and a 0-score risk flag. The assessor reviews, overrides where needed, and records a final score. If they override, both values are stored.
+      </p>
+
+      <h3 class="govuk-heading-s">3. Monitoring plan — draft KPI pack for approved applications</h3>
+      <p class="govuk-body">
+        For a funded application, the AI generates a draft monitoring plan: KPI name, definition, evidence type, reporting cadence, owner, and milestone table — all shaped by the approved application answers and the grant's monitoring template. A grant manager reviews and confirms before the plan is issued to the grantee.
+      </p>
+
+      <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible">
+
+      {# ── 5. Hackathon challenges ── #}
+      <h2 class="govuk-heading-l">How GrantOS addresses all four hackathon challenges</h2>
+
+      <h3 class="govuk-heading-m">Challenge 1: From PDF to digital service</h3>
+      <p class="govuk-body">
+        The EHCF prospectus is a ten-section GOV.UK guidance page. GrantOS turns it into a structured, guided application journey with eligibility pre-check, conditional logic, task-list checklist, and submission confirmation — all driven by JSON configuration that a policy team can update without touching code.
+      </p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Grant Builder UI</li>
+        <li>Task-list form runner</li>
+        <li>Eligibility pre-check from config</li>
+        <li>Save and return</li>
+      </ul>
+
+      <h3 class="govuk-heading-m">Challenge 2: Unlocking the dark data</h3>
+      <p class="govuk-body">
+        An applicant's annual report, project plan, and budget contain all the evidence MHCLG needs — but it sits unstructured in PDFs and spreadsheets. The AI pre-fill feature reads those documents, extracts relevant evidence, and maps it to form fields — making the dark data accessible to both applicant and assessor, with provenance tracked.
+      </p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Document ingestion</li>
+        <li>AI pre-fill with source attribution</li>
+        <li>Knowledge packs</li>
+        <li>Grant schema extractor (stretch)</li>
+      </ul>
+
+      <h3 class="govuk-heading-m">Challenge 3: Supporting casework decisions</h3>
+      <p class="govuk-body">
+        Assessors face volume pressure and inconsistent free-text. The Assessor Workbench gives them a structured view of every application: eligibility gate, per-criterion evidence summary, provisional scores, 0-score risk flags, and missing-evidence detection — all as a starting point for their own informed judgement, not a replacement for it.
+      </p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Eligibility gate</li>
+        <li>AI-assisted scoring with evidence snippets</li>
+        <li>0-score risk flags</li>
+        <li>Override and audit trail</li>
+      </ul>
+
+      <h3 class="govuk-heading-m">Challenge 4: Knowing your own organisation</h3>
+      <p class="govuk-body">
+        Senior leaders in MHCLG's Homelessness team need portfolio visibility — across funds, assessors, and timelines — that currently lives in disconnected spreadsheets. The Portfolio Dashboard gives them application pipeline, assessor workload, common rejection patterns, KPI submission status, and cross-fund comparability in a single view.
+      </p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Portfolio dashboard</li>
+        <li>Director view</li>
+        <li>KPI monitoring</li>
+        <li>Cross-fund data</li>
+      </ul>
+
+      <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible">
+
+      {# ── 6. The scoring model ── #}
+      <h2 class="govuk-heading-l">Scoring model</h2>
+      <p class="govuk-body">
+        The EHCF scoring model is not baked into Python. It lives in <code>seed/grants/ehcf.json</code>. Changing a weight, adding a criterion, or adjusting the auto-reject rule means editing that file — the scoring engine reads from config on every calculation.
+      </p>
+      <p class="govuk-body">
+        Each criterion is scored 0–3 (0 = unacceptable, 1 = satisfactory, 2 = good, 3 = excellent). The formula is:
+      </p>
+      <p class="govuk-body govuk-!-font-weight-bold">
+        weighted_total = sum of (score × weight) for each criterion — maximum 300
+      </p>
+
+      {{ govukTable({
+        "caption": "EHCF scoring criteria and weights",
+        "captionClasses": "govuk-table__caption--m",
+        "head": [
+          {"text": "Criterion"},
+          {"text": "Weight", "format": "numeric"},
+          {"text": "Weighted max (out of 300)", "format": "numeric"}
+        ],
+        "rows": [
+          [{"text": "Proposal Part 2 — project alignment"}, {"text": "30%", "format": "numeric"}, {"text": "90", "format": "numeric"}],
+          [{"text": "Deliverability Part 1 — milestones and plan"}, {"text": "25%", "format": "numeric"}, {"text": "75", "format": "numeric"}],
+          [{"text": "Skills and experience"}, {"text": "10%", "format": "numeric"}, {"text": "30", "format": "numeric"}],
+          [{"text": "Proposal Part 1 — challenges addressed"}, {"text": "10%", "format": "numeric"}, {"text": "30", "format": "numeric"}],
+          [{"text": "Cost and value for money"}, {"text": "10%", "format": "numeric"}, {"text": "30", "format": "numeric"}],
+          [{"text": "Outcomes and measuring impact"}, {"text": "10%", "format": "numeric"}, {"text": "30", "format": "numeric"}],
+          [{"text": "Deliverability Part 2 — risk management"}, {"text": "5%", "format": "numeric"}, {"text": "15", "format": "numeric"}]
+        ]
+      }) }}
+
+      {{ govukWarningText({
+        "text": "Auto-reject rule: if any criterion with auto_reject_on_zero set to true scores 0, the recommendation is forced to reject regardless of the weighted total. This rule lives in the grant config, not the code.",
+        "iconFallbackText": "Warning"
+      }) }}
+
+      <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible">
+
+      {# ── 7. Architecture ── #}
+      <h2 class="govuk-heading-l">Architecture</h2>
+      <p class="govuk-body">
+        The technology choices are conservative so the team could ship in a day. The innovation lives in the architecture: JSON-defined forms and grant configs, a grant-agnostic scoring engine, and a config-driven AI prompt layer.
+      </p>
+
+      {{ govukTable({
+        "caption": "Four-layer separation",
+        "captionClasses": "govuk-table__caption--m",
+        "head": [
+          {"text": "Layer"},
+          {"text": "Technology"},
+          {"text": "Responsibility"}
+        ],
+        "rows": [
+          [{"text": "Grant config data"}, {"text": "seed/grants/*.json, app/forms/*.json"}, {"text": "Eligibility rules, criteria, weights, award ranges, form schemas"}],
+          [{"text": "Flask app core"}, {"text": "Python 3.12+, Flask 3, SQLAlchemy 2, SQLite"}, {"text": "Factory + blueprints, forms runner, scoring engine, models, auth, uploads"}],
+          [{"text": "AI provider wrapper"}, {"text": "Anthropic API (Claude)"}, {"text": "prefill_application(), score_application(), generate_monitoring() — prompts read from grant config"}],
+          [{"text": "GOV.UK Frontend"}, {"text": "govuk-frontend-jinja, Jinja2 templates"}, {"text": "Accessible, WCAG AA compliant UI with GOV.UK Design System components"}]
+        ]
+      }) }}
+
+      <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible">
+
+      {# ── 8. Demo journey ── #}
+      <h2 class="govuk-heading-l">Demo journey</h2>
+      <p class="govuk-body">
+        Every demo user is seeded in the database. No manual sign-up required. The platform is ready to demo immediately.
+      </p>
+
+      <ol class="govuk-list govuk-list--number">
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Grant Admin</span>
+            {{ govukTag({"text": "Admin", "classes": "govuk-tag--grey"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Publishes EHCF from Grant Builder. Adds a second grant via the UI to prove reusability — no code touched.
+          </p>
+        </li>
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Applicant</span>
+            {{ govukTag({"text": "Applicant", "classes": "govuk-tag--blue"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Checks eligibility. Uploads documents. Sees AI pre-filled draft answers. Edits, confirms, and submits.
+          </p>
+        </li>
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Assessor</span>
+            {{ govukTag({"text": "Assessor", "classes": "govuk-tag--yellow"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Opens queue. Reviews eligibility pass/fail, missing docs, AI-assisted criterion scores, and evidence snippets. Overrides one score.
+          </p>
+        </li>
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Grant team</span>
+            {{ govukTag({"text": "Grant team", "classes": "govuk-tag--green"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Approved application generates a tailored KPI pack: outputs, outcomes, reporting cadence, milestone dates.
+          </p>
+        </li>
+        <li>
+          <p class="govuk-body">
+            <span class="govuk-!-font-weight-bold">Director</span>
+            {{ govukTag({"text": "Leadership", "classes": "govuk-tag--grey"}) }}
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-4">
+            Portfolio view: applications submitted, complete, missing support letters, 0-score risk count, average score.
+          </p>
+        </li>
+      </ol>
+
+      <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible">
+
+      {# ── 9. What comes next ── #}
+      <h2 class="govuk-heading-l">What comes next</h2>
+      <p class="govuk-body">
+        GrantOS was built in one day by a team of four at the Version 1 AI Engineering Lab Hackathon in London, April 2026. This is what we would build with more time:
+      </p>
+
+      <ol class="govuk-list govuk-list--number">
+        <li>Onboard a second grant through the Grant Builder UI end-to-end</li>
+        <li>Word-limit validation and conditional form logic</li>
+        <li>Prospectus-to-grant-definition AI extraction</li>
+        <li>Email notifications at each status transition</li>
+        <li>Post-award reporting forms linked to the monitoring plan</li>
+        <li>Moderation workflow for borderline and conflicted applications</li>
+        <li>Postgres migration for production readiness</li>
+        <li>Role-based access control refinements (read-only assessor, lead assessor)</li>
+      </ol>
+
+      {{ govukInsetText({
+        "text": "MHCLG's own Funding Service is already moving toward reusable grant delivery infrastructure. GrantOS explores the same direction at prototype speed, with an AI layer that the production service does not yet have."
+      }) }}
+
+    </div>
+  </div>
+{% endblock %}

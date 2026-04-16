@@ -38,6 +38,7 @@
   {% endset %}
 {% else %}
   {% set _nav_items = [
+    {"href": url_for("public.about"),  "text": "About"},
     {"href": url_for("auth.login"),    "text": "Sign in"},
     {"href": url_for("auth.register"), "text": "Create account"}
   ] %}

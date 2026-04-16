@@ -2,6 +2,29 @@
 
 All notable changes to the GrantOS grants platform.
 
+## 2026-04-16 — UX journey round 2: error pages, allocation, review (PRs #61, #62, #63)
+
+### Fixed
+
+- **Review page back link** (PR #61, Stream A) — moved from `govuk-button-group` to a proper `govuk-back-link` in `{% block beforeContent %}`, consistent with GOV.UK Design System pattern. Button group now only renders when submission is available.
+- **Allocation row highlight + create-user hint** (PR #62, Stream C) — replaced invalid `govuk-!-background-colour-red` class (not in GOV.UK Frontend CSS) with working inline style; added inset text on admin create-user page about out-of-band password sharing.
+- **Error page recovery + CSS utility** (PR #63, Stream D) — 403/404/500 error pages now have actionable recovery steps. `.app-row--over-budget` CSS class added to `app/static/app.css`.
+
+## 2026-04-16 — P4.4 partnership schema (PR #60)
+
+### Added
+
+- **Local Digital partnership form** (PR #60, Stream B) — 4-page application
+  form (`app/forms/local-digital-application-v1.json`) with a partnership page
+  using `visible_when` conditional fields. Partner org details appear only when
+  `is_partnership` is "yes". **No Python code changed** — the existing form
+  runner handles partnership data without modification. 5 new tests.
+
+### Status
+
+- **Phase 0-4 complete.** All build plan items either merged or in PR #60.
+- Test suite: 235 passed, 8 pre-existing anthropic SDK failures.
+
 ## 2026-04-16 — external validators (charity / company number lookup)
 
 ### Added

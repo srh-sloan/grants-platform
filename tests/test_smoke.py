@@ -61,3 +61,12 @@ def test_assessor_queue_requires_login(client):
     response = client.get("/assess/", follow_redirects=False)
     assert response.status_code == 302
     assert "/auth/login" in response.headers["Location"]
+
+
+def test_about_page_returns_200(client):
+    """The /about page is public and contains expected content."""
+    response = client.get("/about")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "GrantOS" in body
+    assert "Scoring model" in body
