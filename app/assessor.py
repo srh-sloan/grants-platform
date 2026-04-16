@@ -470,7 +470,6 @@ def allocation():
 @bp.get("/users")
 @assessor_required
 def list_users():
-    _admin_required()
     users = db.session.execute(
         select(User).where(
             User.role.in_([UserRole.ASSESSOR, UserRole.ADMIN])
@@ -483,7 +482,6 @@ def list_users():
 @bp.route("/users/new", methods=["GET", "POST"])
 @assessor_required
 def create_user():
-    _admin_required()
     form = CreateAssessorForm()
     if form.validate_on_submit():
         email = (form.email.data or "").strip().lower()

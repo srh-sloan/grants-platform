@@ -26,11 +26,9 @@
       <div class="govuk-grid-column-three-quarters">
         <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Assessment queue</h1>
       </div>
-      {% if current_user.is_authenticated and current_user.role.value == "admin" %}
       <div class="govuk-grid-column-one-quarter govuk-!-text-align-right govuk-!-padding-top-4">
         <a class="govuk-link" href="{{ url_for('assessor.list_users') }}">Manage accounts</a>
       </div>
-      {% endif %}
     </div>
 
     {# Filters #}

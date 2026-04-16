@@ -12,6 +12,7 @@
     {% set _nav_items = [
       {"href": url_for("assessor.queue"),      "text": "Queue"},
       {"href": url_for("assessor.allocation"), "text": "Allocation"},
+      {"href": url_for("assessor.list_users"), "text": "Accounts"},
       {"href": url_for("auth.logout"),         "text": "Sign out"}
     ] %}
   {% else %}
