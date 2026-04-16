@@ -35,36 +35,45 @@
     <form method="get" action="{{ url_for('assessor.queue') }}" class="govuk-!-margin-bottom-6">
       <div class="govuk-grid-row">
         <div class="govuk-grid-column-one-quarter">
-          <div class="govuk-form-group">
-            <label class="govuk-label" for="status">Filter by status</label>
-            <select class="govuk-select" id="status" name="status">
-              <option value="">All statuses</option>
-              <option value="submitted" {% if status_filter == "submitted" %}selected{% endif %}>Submitted</option>
-              <option value="under_review" {% if status_filter == "under_review" %}selected{% endif %}>Under review</option>
-              <option value="approved" {% if status_filter == "approved" %}selected{% endif %}>Approved</option>
-              <option value="rejected" {% if status_filter == "rejected" %}selected{% endif %}>Rejected</option>
-            </select>
-          </div>
+          {{ govukSelect({
+            "id": "status",
+            "name": "status",
+            "label": {"text": "Filter by status"},
+            "value": status_filter,
+            "items": [
+              {"value": "", "text": "All statuses"},
+              {"value": "submitted", "text": "Submitted"},
+              {"value": "under_review", "text": "Under review"},
+              {"value": "approved", "text": "Approved"},
+              {"value": "rejected", "text": "Rejected"}
+            ]
+          }) }}
         </div>
         <div class="govuk-grid-column-one-quarter">
-          <div class="govuk-form-group">
-            <label class="govuk-label" for="recommendation">Filter by AI recommendation</label>
-            <select class="govuk-select" id="recommendation" name="recommendation">
-              <option value="">All recommendations</option>
-              <option value="fund" {% if rec_filter == "fund" %}selected{% endif %}>Fund</option>
-              <option value="reject" {% if rec_filter == "reject" %}selected{% endif %}>Reject</option>
-              <option value="refer" {% if rec_filter == "refer" %}selected{% endif %}>Refer</option>
-            </select>
-          </div>
+          {{ govukSelect({
+            "id": "recommendation",
+            "name": "recommendation",
+            "label": {"text": "Filter by AI recommendation"},
+            "value": rec_filter,
+            "items": [
+              {"value": "", "text": "All recommendations"},
+              {"value": "fund", "text": "Fund"},
+              {"value": "reject", "text": "Reject"},
+              {"value": "refer", "text": "Refer"}
+            ]
+          }) }}
         </div>
         <div class="govuk-grid-column-one-quarter govuk-!-padding-top-6">
-          <button class="govuk-button govuk-button--secondary" type="submit">Apply filters</button>
+          {{ govukButton({"text": "Apply filters", "classes": "govuk-button--secondary"}) }}
           {% if status_filter or rec_filter %}
             <a class="govuk-link govuk-!-margin-left-3" href="{{ url_for('assessor.queue') }}">Clear</a>
           {% endif %}
         </div>
         <div class="govuk-grid-column-one-quarter govuk-!-padding-top-6 govuk-!-text-align-right">
-          <a class="govuk-button" href="{{ url_for('assessor.allocation') }}">Allocation dashboard</a>
+          {{ govukButton({
+            "text": "Allocation dashboard",
+            "href": url_for('assessor.allocation')
+          }) }}
         </div>
       </div>
     </form>

@@ -34,6 +34,12 @@ from email.mime.text import MIMEText
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from flask_wtf import FlaskForm
+from govuk_frontend_wtf.wtforms_widgets import (
+    GovPasswordInput,
+    GovSelect,
+    GovSubmitInput,
+    GovTextInput,
+)
 from sqlalchemy import select
 from werkzeug.security import generate_password_hash
 from wtforms import PasswordField, SelectField, StringField, SubmitField
@@ -83,6 +89,7 @@ class CreateAssessorForm(FlaskForm):
 
     email = StringField(
         "Email address",
+        widget=GovTextInput(),
         validators=[
             InputRequired(message="Enter an email address"),
             Length(max=255),
@@ -91,6 +98,7 @@ class CreateAssessorForm(FlaskForm):
     )
     role = SelectField(
         "Role",
+        widget=GovSelect(),
         choices=[
             (UserRole.ASSESSOR.value, "Assessor"),
             (UserRole.ADMIN.value, "Admin"),
@@ -99,6 +107,8 @@ class CreateAssessorForm(FlaskForm):
     )
     password = PasswordField(
         "Password",
+        widget=GovPasswordInput(),
+        description="Must be at least 10 characters.",
         validators=[
             InputRequired(message="Enter a password"),
             Length(min=_PASSWORD_MIN_LENGTH, max=128,
@@ -107,12 +117,13 @@ class CreateAssessorForm(FlaskForm):
     )
     confirm_password = PasswordField(
         "Confirm password",
+        widget=GovPasswordInput(),
         validators=[
             InputRequired(message="Confirm the password"),
             EqualTo("password", message="Passwords must match"),
         ],
     )
-    submit = SubmitField("Create account")
+    submit = SubmitField("Create account", widget=GovSubmitInput())
 
     def validate_email(self, field: StringField) -> None:
         email = (field.data or "").strip().lower()
@@ -135,6 +146,7 @@ class EditUserForm(FlaskForm):
 
     email = StringField(
         "Email address",
+        widget=GovTextInput(),
         validators=[
             InputRequired(message="Enter an email address"),
             Length(max=255),
@@ -143,6 +155,7 @@ class EditUserForm(FlaskForm):
     )
     role = SelectField(
         "Role",
+        widget=GovSelect(),
         choices=[
             (UserRole.ASSESSOR.value, "Assessor"),
             (UserRole.ADMIN.value, "Admin"),
@@ -151,15 +164,18 @@ class EditUserForm(FlaskForm):
     )
     new_password = PasswordField(
         "New password",
+        widget=GovPasswordInput(),
+        description="Leave blank to keep the existing password.",
         validators=[],
     )
     confirm_new_password = PasswordField(
         "Confirm new password",
+        widget=GovPasswordInput(),
         validators=[
             EqualTo("new_password", message="Passwords must match"),
         ],
     )
-    submit = SubmitField("Save changes")
+    submit = SubmitField("Save changes", widget=GovSubmitInput())
 
     def __init__(self, *args, user_id: int | None = None, **kwargs):
         super().__init__(*args, **kwargs)
