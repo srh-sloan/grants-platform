@@ -43,6 +43,7 @@ from app.auth import applicant_required, assessor_required, login_required
 ```python
 from app.forms_runner import (
     list_pages, get_page, next_page_id, prev_page_id,
+    get_page_position,   # returns (1-based position, total pages) for a page_id
     validate_page, merge_page_answers,
     evaluate_eligibility, EligibilityResult,
     SUPPORTED_FIELD_TYPES,
@@ -53,10 +54,18 @@ Pure functions — no Flask, no DB. See the module docstring for the schema
 contract. Supported field types are frozen; adding one requires coordinating
 with Stream A (template macro) and Stream D (model implications, if any).
 
+`get_page_position(schema, page_id) -> tuple[int, int]` returns `(position,
+total)` where position is 1-based. Raises `ValueError` if `page_id` is not
+found in the schema. Stream A uses this to pass `page_number` and `total_pages`
+to `forms/page.html`.
+
 Stream B also owns two shared Jinja templates (render from any blueprint):
 
 - `templates/forms/page.html` — a single form page. Context:
-  `{form, application, page, answers, errors, back_url, action_url}`.
+  `{form, application, page, answers, errors, back_url, action_url,
+  page_number (optional int), total_pages (optional int)}`. When both
+  `page_number` and `total_pages` are provided (non-None), the template
+  renders a "Page X of Y" progress indicator above the page heading.
 - `templates/forms/summary.html` — read-only summary of all answers. Context:
   `{schema, answers, documents}`. Used by Stream A's review page and Stream
   C's application detail view.

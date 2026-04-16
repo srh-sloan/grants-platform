@@ -1,195 +1,46 @@
 {#
-  Applicant form page — owned by Stream B (P1.3 / P2.1).
+  Shared applicant form page — owned by Stream B.
 
   Context:
     form         — Form model
-    application  — Application model (application.id, application.grant.name)
-    page         — page dict from the JSON schema {id, title, fields}
+    application  — Application model
+    page         — page dict from the JSON schema
     answers      — {field_id: value} for this page (may be empty)
-    errors       — {field_id: "message"} from validate_page (may be empty)
-    action_url   — POST target built by Stream A
-    back_url     — previous-page URL or None
+    errors       — {field_id: "message"} (may be empty)
+    action_url   — POST target (built by Stream A)
+    back_url     — optional previous-page URL (built by Stream A)
+    page_number  — (optional) 1-based index of this page; omit or pass None
+    total_pages  — (optional) total number of pages; omit or pass None
+
+  When both page_number and total_pages are provided the template renders a
+  "Page X of Y" progress line above the page heading. Stream A computes these
+  by calling forms_runner.get_page_position(schema, page_id).
 #}
 {% extends "base.html" %}
 
-{% from 'govuk_frontend_jinja/components/input/macro.html'         import govukInput %}
-{% from 'govuk_frontend_jinja/components/textarea/macro.html'      import govukTextarea %}
-{% from 'govuk_frontend_jinja/components/radios/macro.html'        import govukRadios %}
-{% from 'govuk_frontend_jinja/components/checkboxes/macro.html'    import govukCheckboxes %}
-{% from 'govuk_frontend_jinja/components/select/macro.html'        import govukSelect %}
-{% from 'govuk_frontend_jinja/components/date-input/macro.html'    import govukDateInput %}
-{% from 'govuk_frontend_jinja/components/file-upload/macro.html'   import govukFileUpload %}
-{% from 'govuk_frontend_jinja/components/error-summary/macro.html' import govukErrorSummary %}
-{% from 'govuk_frontend_jinja/components/button/macro.html'        import govukButton %}
-
 {% block title %}{{ page.title }}{% endblock %}
-
-{% block beforeContent %}
-  {{ super() }}
-  {% if back_url %}
-    <a href="{{ back_url }}" class="govuk-back-link">Back</a>
-  {% endif %}
-{% endblock %}
 
 {% block content %}
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
-
       <span class="govuk-caption-l">{{ application.grant.name }}</span>
+      {% if page_number and total_pages %}
+        <p class="govuk-body-s govuk-!-colour-secondary">Page {{ page_number }} of {{ total_pages }}</p>
+      {% endif %}
       <h1 class="govuk-heading-xl">{{ page.title }}</h1>
 
-      {# Build the error summary list so each item links to its field. #}
+      <div class="govuk-inset-text">
+        Form page renderer is a Stream B placeholder. Fields to come:
+        <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-2">
+          {% for field in page.fields %}
+            <li><code>{{ field.id }}</code> ({{ field.type }}){% if field.required %} <strong>required</strong>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </div>
+
       {% if errors %}
-        {% set error_list = [] %}
-        {% for field_id, msg in errors.items() %}
-          {% set _ = error_list.append({"text": msg, "href": "#" ~ field_id}) %}
-        {% endfor %}
-        {{ govukErrorSummary({"titleText": "There is a problem", "errorList": error_list}) }}
+        <p class="govuk-error-message">{{ errors|length }} field(s) need attention.</p>
       {% endif %}
-
-      <form method="POST" action="{{ action_url }}" enctype="multipart/form-data" novalidate>
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-        {% for field in page.fields %}
-
-          {# Resolve any existing answer and error for this field. #}
-          {% set field_value = answers.get(field.id, "") %}
-          {% set field_error = errors.get(field.id) %}
-          {% set error_obj = {"text": field_error} if field_error else {} %}
-
-          {# ---- text ---- #}
-          {% if field.type == "text" %}
-            {{ govukInput({
-              "id": field.id,
-              "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
-              "value": field_value,
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {# ---- textarea ---- #}
-          {% elif field.type == "textarea" %}
-            {{ govukTextarea({
-              "id": field.id,
-              "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
-              "value": field_value,
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {# ---- radio ---- #}
-          {% elif field.type == "radio" %}
-            {% set radio_items = [] %}
-            {% for opt in field.options %}
-              {% set checked = (field_value == opt.value) %}
-              {% set _ = radio_items.append({
-                "value": opt.value,
-                "text": opt.label,
-                "checked": checked
-              }) %}
-            {% endfor %}
-            {{ govukRadios({
-              "idPrefix": field.id,
-              "name": field.id,
-              "fieldset": {
-                "legend": {
-                  "text": field.label,
-                  "classes": "govuk-fieldset__legend--s"
-                }
-              },
-              "items": radio_items,
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {# ---- checkbox (single boolean) ---- #}
-          {% elif field.type == "checkbox" %}
-            {% set checked = (field_value == "on" or field_value == true or field_value == "true") %}
-            {{ govukCheckboxes({
-              "idPrefix": field.id,
-              "name": field.id,
-              "items": [
-                {
-                  "value": "on",
-                  "text": field.label,
-                  "checked": checked
-                }
-              ],
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {# ---- select ---- #}
-          {% elif field.type == "select" %}
-            {% set select_items = [{"value": "", "text": ""}] %}
-            {% for opt in field.options %}
-              {% set selected = (field_value == opt.value) %}
-              {% set _ = select_items.append({
-                "value": opt.value,
-                "text": opt.label,
-                "selected": selected
-              }) %}
-            {% endfor %}
-            {{ govukSelect({
-              "id": field.id,
-              "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
-              "items": select_items,
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {# ---- number ---- #}
-          {% elif field.type == "number" %}
-            {{ govukInput({
-              "id": field.id,
-              "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
-              "inputmode": "numeric",
-              "value": field_value,
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {# ---- currency ---- #}
-          {% elif field.type == "currency" %}
-            {{ govukInput({
-              "id": field.id,
-              "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
-              "inputmode": "numeric",
-              "prefix": {"text": "£"},
-              "value": field_value,
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {# ---- date ---- #}
-          {% elif field.type == "date" %}
-            {{ govukDateInput({
-              "id": field.id,
-              "namePrefix": field.id,
-              "fieldset": {
-                "legend": {
-                  "text": field.label,
-                  "classes": "govuk-fieldset__legend--s"
-                }
-              },
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {# ---- file ---- #}
-          {% elif field.type == "file" %}
-            {{ govukFileUpload({
-              "id": field.id,
-              "name": field.id,
-              "label": {"text": field.label, "classes": "govuk-label--s"},
-              "errorMessage": error_obj if field_error else None
-            }) }}
-
-          {% endif %}
-
-        {% endfor %}
-
-        {{ govukButton({"text": "Save and continue"}) }}
-
-      </form>
-
     </div>
   </div>
 {% endblock %}

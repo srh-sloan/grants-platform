@@ -77,6 +77,21 @@ def prev_page_id(schema: dict, current_page_id: str) -> str | None:
     return None
 
 
+def get_page_position(schema: dict, page_id: str) -> tuple[int, int]:
+    """Return ``(1-based position, total pages)`` for the given ``page_id``.
+
+    Raises :exc:`ValueError` if ``page_id`` is not found in the schema.
+
+    Stream A calls this and passes ``page_number`` and ``total_pages`` to the
+    ``forms/page.html`` template to render the "Page X of Y" indicator.
+    """
+    pages = list_pages(schema)
+    for idx, page in enumerate(pages):
+        if page.get("id") == page_id:
+            return (idx + 1, len(pages))
+    raise ValueError(f"page_id {page_id!r} not found in schema")
+
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
