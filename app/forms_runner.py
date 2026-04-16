@@ -161,10 +161,65 @@ def evaluate_eligibility(rules: list[dict], answers: dict) -> EligibilityResult:
         {"id": "org_type", "type": "in", "values": [...]}
         {"id": "operates_in_england", "type": "equals", "value": true}
         {"id": "years_serving_homeless", "type": "min", "value": 3}
-
-    Stream B fills in the handlers in Phase 2 (P2.2). Until then the stub
-    reports a single failure so callers degrade gracefully rather than
-    pretending everyone's eligible.
     """
-    # Phase 2 (Stream B): replace with real handlers per rule ``type``.
-    raise NotImplementedError("Stream B: evaluate_eligibility not implemented yet")
+    failures: list[str] = []
+    labels: dict[str, str] = {rule["id"]: rule["label"] for rule in rules}
+
+    for rule in rules:
+        if not _check_rule(rule, answers):
+            failures.append(rule["id"])
+
+    return EligibilityResult(passed=len(failures) == 0, failures=failures, labels=labels)
+
+
+def _normalise_bool(value: object) -> bool | None:
+    """Normalise boolean-ish values to Python bool, or return None if not boolean-ish."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value.lower() in ("true", "yes"):
+            return True
+        if value.lower() in ("false", "no"):
+            return False
+    return None
+
+
+def _check_rule(rule: dict, answers: dict) -> bool:
+    """Return True if the rule passes for the given answers, False if it fails.
+
+    Raises ValueError for unknown rule types.
+    """
+    rule_id: str = rule["id"]
+    rule_type: str = rule["type"]
+
+    if rule_id not in answers:
+        return False
+
+    raw = answers[rule_id]
+
+    if rule_type == "in":
+        return str(raw) in rule["values"]
+
+    if rule_type == "equals":
+        expected = rule["value"]
+        # If expected is a Python bool, normalise the answer before comparing.
+        if isinstance(expected, bool):
+            normalised = _normalise_bool(raw)
+            if normalised is None:
+                return False
+            return normalised == expected
+        return raw == expected
+
+    if rule_type == "max":
+        try:
+            return float(raw) <= rule["value"]
+        except (TypeError, ValueError):
+            return False
+
+    if rule_type == "min":
+        try:
+            return float(raw) >= rule["value"]
+        except (TypeError, ValueError):
+            return False
+
+    raise ValueError(f"Unknown rule type: {rule_type!r}")
